@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>txqr test page</title>
+<style>
+  :root { color-scheme: light dark; font: 14px/1.4 system-ui, sans-serif; }
+  body { margin: 0 auto; padding: 16px; max-width: 1100px; }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  h2 { font-size: 16px; margin: 0 0 8px; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  section { border: 1px solid #8884; border-radius: 8px; padding: 12px; min-width: 0; }
+  label { display: grid; grid-template-columns: 9em 1fr; align-items: center; gap: 8px; margin: 4px 0; }
+  input[type=number], select { width: 100%; box-sizing: border-box; }
+  textarea { width: 100%; box-sizing: border-box; height: 6em; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+  #qr { background: #fff; display: inline-block; line-height: 0; max-width: 100%; }
+  #qr svg { max-width: 100%; height: auto; }
+  .stats { font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap; word-break: break-all; }
+  progress { width: 100%; height: 16px; }
+  video, #camCanvas { max-width: 100%; }
+  #output { max-height: 12em; overflow: auto; border: 1px solid #8884; padding: 6px; }
+</style>
+</head>
+<body>
+<h1>txqr test page</h1>
+<div class="cols">
+  <section>
+    <h2>Sender</h2>
+    <textarea id="text">The quick brown fox jumps over the lazy dog. </textarea>
+    <div class="row">
+      <button id="repeat">Repeat text ×10</button>
+      <input type="file" id="file">
+    </div>
+    <label>Chunk size (B) <input type="number" id="chunkSize" min="1" max="2800"></label>
+    <label>Redundancy <input type="number" id="redundancy" min="1" step="0.1"></label>
+    <label>Frame duration (ms) <input type="number" id="frameDuration" min="10" step="10"></label>
+    <label>QR size (px) <input type="number" id="size" min="50" step="10"></label>
+    <label>Border (modules) <input type="number" id="border" min="1"></label>
+    <label>Error correction
+      <select id="ecc">
+        <option value="low">Low (7%)</option>
+        <option value="medium">Medium (15%)</option>
+        <option value="quartile">Quartile (25%)</option>
+        <option value="high">High (30%)</option>
+      </select>
+    </label>
+    <div class="row">
+      <button id="start">Start</button>
+      <button id="stop">Stop</button>
+      <button id="defaults">Defaults</button>
+    </div>
+    <div id="qr"></div>
+    <div class="stats" id="sendStats"></div>
+  </section>
+
+  <section>
+    <h2>Receiver</h2>
+    <label>Source
+      <select id="source">
+        <option value="loopback">Loopback (decode the sender's pixels)</option>
+        <option value="camera">Camera</option>
+      </select>
+    </label>
+    <label>Simulated loss (%) <input type="number" id="loss" min="0" max="95" value="30"></label>
+    <div class="row">
+      <button id="reset">Reset receiver</button>
+    </div>
+    <progress id="progress" max="1" value="0"></progress>
+    <div class="stats" id="recvStats"></div>
+    <video id="video" playsinline muted hidden></video>
+    <canvas id="camCanvas" hidden></canvas>
+    <h2>Result</h2>
+    <div class="stats" id="output"></div>
+    <div class="row"><a id="download" hidden>Download</a></div>
+  </section>
+</div>
+
+<script type="module">
+import { DEFAULTS, Decoder, Encoder, readQR, utf8Decode } from "./txqr.js";
+
+const $ = (id) => document.getElementById(id);
+const PARAMS = ["chunkSize", "redundancy", "frameDuration", "size", "border", "ecc"];
+
+let payload = null;     // Uint8Array from a chosen file, else the textarea is used
+let encoder = null;
+let startTime = 0;
+let shown = -1;
+let timer = 0;
+const decoder = new Decoder();
+let decodeStart = 0;
+let lastDecoded = "";
+let stream = null;
+
+function loadDefaults() {
+  for (const p of PARAMS) $(p).value = DEFAULTS[p];
+}
+
+function options() {
+  const o = {};
+  for (const p of PARAMS) o[p] = p === "ecc" ? $(p).value : Number($(p).value);
+  return o;
+}
+
+function start() {
+  stop();
+  try {
+    encoder = new Encoder(payload ?? $("text").value, options());
+  } catch (e) {
+    $("sendStats").textContent = `error: ${e.message}`;
+    return;
+  }
+  startTime = performance.now();
+  shown = -1;
+  tick();
+}
+
+function stop() {
+  clearTimeout(timer);
+  encoder = null;
+}
+
+// Timer-driven so frames keep their exact duration even if rendering is slow.
+function tick() {
+  if (!encoder) return;
+  const t = performance.now() - startTime;
+  const i = encoder.indexAt(t);
+  if (i !== shown) {
+    shown = i;
+    try {
+      $("qr").innerHTML = encoder.renderSVG(i);
+    } catch (e) {
+      $("sendStats").textContent = `error: ${e.message}`;
+      stop();
+      return;
+    }
+    const o = encoder.options;
+    $("sendStats").textContent =
+      `size ${encoder.size} B, ${encoder.blockCount} blocks, ${encoder.frameCount} frames/loop\n` +
+      `${(1000 / o.frameDuration).toFixed(1)} FPS, loop ${(encoder.loopDuration / 1000).toFixed(1)} s\n` +
+      `frame ${i}: ${encoder.frame(i).length} chars`;
+    if ($("source").value === "loopback") receiveLoopback(i);
+  }
+  const next = (Math.floor(t / encoder.options.frameDuration) + 1) * encoder.options.frameDuration;
+  timer = setTimeout(tick, Math.max(0, next - t));
+}
+
+function receiveLoopback(i) {
+  if (decoder.complete) return;
+  if (Math.random() * 100 < Number($("loss").value)) return updateRecv("dropped");
+  // Read the frame back from pixels, like a camera would (minus the blur).
+  const text = readQR(encoder.renderImage(i));
+  receive(text);
+}
+
+function receive(text) {
+  if (text === undefined || !Decoder.isFrame(text)) return updateRecv(text === undefined ? "no QR" : "not txqr");
+  if (decoder.received === 0) decodeStart = performance.now();
+  try {
+    decoder.push(text);
+  } catch (e) {
+    return updateRecv(`error: ${e.message}`);
+  }
+  lastDecoded = text.slice(0, text.indexOf(":"));
+  updateRecv("ok");
+  if (decoder.complete) showResult();
+}
+
+function updateRecv(last) {
+  $("progress").value = decoder.progress;
+  $("recvStats").textContent =
+    `${decoder.received} frames received, ${(decoder.progress * 100).toFixed(0)}% solved` +
+    (decoder.blockCount ? ` (${decoder.blockCount} blocks needed)` : "") +
+    `\nlast: ${last}${lastDecoded ? `, header ${lastDecoded}` : ""}` +
+    (decoder.complete ? `\ncomplete in ${((performance.now() - decodeStart) / 1000).toFixed(2)} s` : "");
+}
+
+function showResult() {
+  const bytes = decoder.bytes();
+  const text = utf8Decode(bytes);
+  $("output").textContent = text.includes("�") ? `${bytes.length} bytes of binary data` : text;
+  const a = $("download");
+  URL.revokeObjectURL(a.href);
+  a.href = URL.createObjectURL(new Blob([bytes]));
+  a.download = "txqr-received.bin";
+  a.hidden = false;
+}
+
+function resetReceiver() {
+  decoder.reset();
+  lastDecoded = "";
+  $("output").textContent = "";
+  $("download").hidden = true;
+  updateRecv("-");
+}
+
+async function setSource() {
+  stream?.getTracks().forEach((t) => t.stop());
+  stream = null;
+  $("video").hidden = true;
+  if ($("source").value !== "camera") return;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+  } catch (e) {
+    $("recvStats").textContent = `camera error: ${e.message}`;
+    return;
+  }
+  const video = $("video");
+  video.srcObject = stream;
+  video.hidden = false;
+  await video.play();
+  const canvas = $("camCanvas");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const loop = () => {
+    if (!stream) return;
+    if (video.videoWidth && !decoder.complete) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+      const text = readQR(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      if (text !== undefined) receive(text);
+    }
+    requestAnimationFrame(loop);
+  };
+  loop();
+}
+
+$("start").onclick = start;
+$("stop").onclick = stop;
+$("defaults").onclick = () => { loadDefaults(); if (encoder) start(); };
+$("reset").onclick = resetReceiver;
+$("source").onchange = setSource;
+$("repeat").onclick = () => { $("text").value = $("text").value.repeat(10); payload = null; $("file").value = ""; };
+$("text").oninput = () => { payload = null; $("file").value = ""; };
+$("file").onchange = async () => {
+  const f = $("file").files[0];
+  payload = f ? new Uint8Array(await f.arrayBuffer()) : null;
+};
+for (const p of PARAMS) $(p).onchange = () => { if (encoder) start(); };
+
+loadDefaults();
+$("text").value = $("text").value.repeat(20);
+resetReceiver();
+</script>
+</body>
+</html>

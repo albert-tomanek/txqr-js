@@ -1,0 +1,21 @@
+{
+  "imports": {
+    "qr": "npm:qr@0.7.2",
+    "qr/": "npm:/qr@0.7.2/",
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "compilerOptions": {
+    "strict": true
+  },
+  "tasks": {
+    "build": "deno run --allow-read --allow-write --allow-run --allow-env scripts/build.ts",
+    "check": "deno check src/mod.ts test/txqr.test.ts web/serve.ts scripts/build.ts",
+    "test": "deno test test/ && qjs --std test/quickjs.js",
+    "serve": "deno run --allow-net=0.0.0.0 --allow-read=. --allow-sys=networkInterfaces web/serve.ts",
+    "serve:https": "deno run --allow-net=0.0.0.0 --allow-read=. --allow-write=.cert --allow-run=openssl --allow-sys=networkInterfaces web/serve.ts --https"
+  },
+  "fmt": {
+    "lineWidth": 100
+  },
+  "exclude": ["dist/"]
+}

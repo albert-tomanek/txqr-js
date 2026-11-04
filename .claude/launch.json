@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "txqr-test-page",
+      "runtimeExecutable": "/home/albert/.bin/deno",
+      "runtimeArgs": ["task", "serve"],
+      "port": 8000
+    }
+  ]
+}
