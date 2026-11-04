@@ -4,6 +4,8 @@ A mostly vibe-coded TypeScript rewrite of [divan/txqr](https://github.com/divan/
 
 Compiles to a single JS file (~60kb) and a `.d.ts` for typescript.
 
+See demo [here](https://htmlpreview.github.io/?https://github.com/albert-tomanek/txqr-js/blob/master/dist/demo.html).
+
 ### Desktop
 
 See `qt-demo/`. The decoder has a method that you can pass decoded QR code data, meaning you can do QR code reading natively and not in the JS.
