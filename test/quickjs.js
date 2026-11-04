@@ -2,7 +2,7 @@
 // (run `deno task build` first). Proves dist/txqr.mjs needs nothing beyond
 // plain ECMAScript.
 import * as std from "std";
-import { DEFAULTS, Decoder, Encoder, fromBase64, readQR, renderImage, toBase64 } from "../dist/txqr.mjs";
+import * as TxQR from "../dist/txqr.mjs";
 
 let failed = 0;
 function check(name, fn) {
@@ -33,13 +33,13 @@ function randomBytes(n, seed) {
 }
 
 check("defaults", () => {
-  assert(DEFAULTS.chunkSize === 100 && DEFAULTS.size === 300 && !("frameDuration" in DEFAULTS));
+  assert(TxQR.DEFAULTS.chunkSize === 100 && TxQR.DEFAULTS.size === 300 && !("frameDuration" in TxQR.DEFAULTS));
 });
 
 check("text round-trip with loss", () => {
   const msg = "Hello from QuickJS — ünïcödé 😀 ".repeat(50);
-  const e = new Encoder(msg);
-  const d = new Decoder();
+  const e = new TxQR.Encoder(msg);
+  const d = new TxQR.Decoder();
   for (let code = 3; !d.complete; code++) {
     if (code % 3 === 0) continue;
     d.push(e.frame(code));
@@ -50,8 +50,8 @@ check("text round-trip with loss", () => {
 
 check("binary through rendered pixels", () => {
   const data = randomBytes(1500, 42);
-  const e = new Encoder(data, { chunkSize: 250, ecc: "low", size: 360 });
-  const d = new Decoder();
+  const e = new TxQR.Encoder(data, { chunkSize: 250, ecc: "low", size: 360 });
+  const d = new TxQR.Decoder();
   for (let i = 0; !d.complete; i++) {
     d.pushImage(e.renderImage(i));
     assert(i < e.frameCount, "did not converge");
@@ -61,8 +61,8 @@ check("binary through rendered pixels", () => {
 
 check("pushBytes (natively decoded payloads)", () => {
   const data = randomBytes(2000, 11);
-  const e = new Encoder(data);
-  const d = new Decoder();
+  const e = new TxQR.Encoder(data);
+  const d = new TxQR.Decoder();
   for (let i = 0; !d.complete; i++) {
     const s = e.frame(i);
     const bytes = new Uint8Array(s.length);
@@ -74,13 +74,13 @@ check("pushBytes (natively decoded payloads)", () => {
 });
 
 check("readQR / base64", () => {
-  assert(readQR(renderImage("QUICKJS")) === "QUICKJS");
+  assert(TxQR.readQR(TxQR.renderImage("QUICKJS")) === "QUICKJS");
   const b = randomBytes(31, 7);
-  assert(bytesEqual(fromBase64(toBase64(b)), b));
+  assert(bytesEqual(TxQR.fromBase64(TxQR.toBase64(b)), b));
 });
 
 check("SVG render", () => {
-  assert(new Encoder("x").renderSVG(0).startsWith("<svg"));
+  assert(new TxQR.Encoder("x").renderSVG(0).startsWith("<svg"));
 });
 
 if (failed) {

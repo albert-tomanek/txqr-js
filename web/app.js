@@ -1,6 +1,6 @@
 // Test page logic. Served by web/serve.ts in development; inlined into
 // dist/demo.html by scripts/build.ts.
-import { DEFAULTS, Decoder, Encoder, readQR, utf8Decode } from "./txqr.mjs";
+import * as TxQR from "./txqr.mjs";
 
 const $ = (id) => document.getElementById(id);
 const PARAMS = ["chunkSize", "redundancy", "size", "border", "ecc"];
@@ -14,13 +14,13 @@ let encoder = null;
 let startTime = 0;
 let shown = -1;
 let timer = 0;
-const decoder = new Decoder();
+const decoder = new TxQR.Decoder();
 let decodeStart = 0;
 let lastDecoded = "";
 let stream = null;
 
 function loadDefaults() {
-  for (const p of PARAMS) $(p).value = DEFAULTS[p];
+  for (const p of PARAMS) $(p).value = TxQR.DEFAULTS[p];
   $("frameDuration").value = DEFAULT_FRAME_DURATION;
 }
 
@@ -35,7 +35,7 @@ function start() {
   try {
     frameDuration = Number($("frameDuration").value);
     if (!(frameDuration > 0)) throw new RangeError(`invalid frame duration: ${frameDuration}`);
-    encoder = new Encoder(payload ?? $("text").value, options());
+    encoder = new TxQR.Encoder(payload ?? $("text").value, options());
   } catch (e) {
     $("sendStats").textContent = `error: ${e.message}`;
     return;
@@ -78,12 +78,12 @@ function receiveLoopback(i) {
   if (decoder.complete) return;
   if (Math.random() * 100 < Number($("loss").value)) return updateRecv("dropped");
   // Read the frame back from pixels, like a camera would (minus the blur).
-  const text = readQR(encoder.renderImage(i));
+  const text = TxQR.readQR(encoder.renderImage(i));
   receive(text);
 }
 
 function receive(text) {
-  if (text === undefined || !Decoder.isFrame(text)) return updateRecv(text === undefined ? "no QR" : "not txqr");
+  if (text === undefined || !TxQR.Decoder.isFrame(text)) return updateRecv(text === undefined ? "no QR" : "not txqr");
   if (decoder.received === 0) decodeStart = performance.now();
   try {
     decoder.push(text);
@@ -106,7 +106,7 @@ function updateRecv(last) {
 
 function showResult() {
   const bytes = decoder.bytes();
-  const text = utf8Decode(bytes);
+  const text = TxQR.utf8Decode(bytes);
   $("output").textContent = text.includes("�") ? `${bytes.length} bytes of binary data` : text;
   const a = $("download");
   URL.revokeObjectURL(a.href);
@@ -146,7 +146,7 @@ async function setSource() {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       ctx.drawImage(video, 0, 0);
-      const text = readQR(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      const text = TxQR.readQR(ctx.getImageData(0, 0, canvas.width, canvas.height));
       if (text !== undefined) receive(text);
     }
     requestAnimationFrame(loop);

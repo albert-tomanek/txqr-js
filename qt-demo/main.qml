@@ -1,5 +1,5 @@
 import QtQuick
-import "dist/txqr.mjs" as Txqr
+import "dist/txqr.mjs" as TxQR
 
 Rectangle {
     color: "#2d6cdf"
@@ -12,7 +12,7 @@ Rectangle {
     }
 
     Component.onCompleted: {
-        const enc = new Txqr.Encoder("hello", { chunkSize: 100 })
-        console.log(enc.frameCount, Txqr.DEFAULTS.chunkSize)
+        const enc = new TxQR.Encoder("hello", { chunkSize: 100 })
+        console.log(enc.frameCount, TxQR.DEFAULTS.chunkSize)
     }
 }

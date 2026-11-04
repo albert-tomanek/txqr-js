@@ -3,7 +3,7 @@
 // (`deno task test:qml`; run `deno task build` first). QV4_GC_TIMELIMIT=0
 // works around a crash in Qt 6.8's incremental garbage collector.
 import QtQml
-import "../dist/txqr.mjs" as Txqr
+import "../dist/txqr.mjs" as TxQR
 
 QtObject {
     function randomBytes(n, seed) {
@@ -34,11 +34,11 @@ QtObject {
 
     Component.onCompleted: {
         const tests = {
-            "defaults": () => Txqr.DEFAULTS.chunkSize === 100 && !("frameDuration" in Txqr.DEFAULTS),
+            "defaults": () => TxQR.DEFAULTS.chunkSize === 100 && !("frameDuration" in TxQR.DEFAULTS),
             "text round-trip with loss": () => {
                 const msg = "Hello from QML ünïcödé 😀 ".repeat(40);
-                const e = new Txqr.Encoder(msg);
-                const d = new Txqr.Decoder();
+                const e = new TxQR.Encoder(msg);
+                const d = new TxQR.Decoder();
                 for (let code = 1; !d.complete && code < 1000; code++)
                     if (code % 3) d.push(e.frame(code));
                 return d.text() === msg;
@@ -46,8 +46,8 @@ QtObject {
             "binary, many encoders and decoders": () => {
                 const data = randomBytes(20000, 5);
                 for (let r = 0; r < 5; r++) {
-                    const e = new Txqr.Encoder(data, { chunkSize: 200 });
-                    const d = new Txqr.Decoder();
+                    const e = new TxQR.Encoder(data, { chunkSize: 200 });
+                    const d = new TxQR.Decoder();
                     for (let i = 0; !d.complete && i < 1000; i++)
                         if (i % 4) d.push(e.frame(i));
                     if (!bytesEqual(d.bytes(), data)) return false;
@@ -56,16 +56,16 @@ QtObject {
             },
             "read from camera-sized frames": () => {
                 const data = randomBytes(1500, 42);
-                const e = new Txqr.Encoder(data, { chunkSize: 250, ecc: "low", size: 360 });
-                const d = new Txqr.Decoder();
+                const e = new TxQR.Encoder(data, { chunkSize: 250, ecc: "low", size: 360 });
+                const d = new TxQR.Decoder();
                 for (let i = 0; !d.complete && i < e.frameCount; i++)
                     d.pushImage(cameraFrame(e.renderImage(i)));
                 return bytesEqual(d.bytes(), data);
             },
             "pushBytes (natively decoded payloads)": () => {
                 const data = randomBytes(2000, 11);
-                const e = new Txqr.Encoder(data);
-                const d = new Txqr.Decoder();
+                const e = new TxQR.Encoder(data);
+                const d = new TxQR.Decoder();
                 for (let i = 0; !d.complete && i < 100; i++) {
                     const s = e.frame(i);
                     const bytes = new Uint8Array(s.length);
@@ -74,7 +74,7 @@ QtObject {
                 }
                 return bytesEqual(d.bytes(), data);
             },
-            "SVG render": () => new Txqr.Encoder("x").renderSVG(0).startsWith("<svg"),
+            "SVG render": () => new TxQR.Encoder("x").renderSVG(0).startsWith("<svg"),
         };
         let failed = 0;
         for (const name in tests) {

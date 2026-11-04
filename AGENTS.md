@@ -51,6 +51,9 @@ The same file must work in QuickJS and QV4, which lag behind browsers:
   rejects newer syntax (e.g. `catch {}`, async functions). Newer syntax is fine in the
   source as long as esbuild can lower it. Runtime APIs are not polyfilled, so avoid ones
   newer than ES2016 that QV4 lacks.
+- **Namespace: `TxQR`** (this capitalisation). The module has no built-in name, so
+  examples, tests and docs import it as `import * as TxQR from "./txqr.mjs"` in JS
+  and `import "txqr.mjs" as TxQR` in QML.
 - **Keep the API synchronous** with plain-data inputs and outputs, so hosts can call it
   through simple bridges.
 - **QR decoding in JS must stay optional.** Hosts may decode QR codes natively and feed

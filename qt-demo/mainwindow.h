@@ -4,6 +4,7 @@
 #include <QFile>
 
 #include "props.h"
+#include "wrapper.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -15,6 +16,9 @@ class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
+    TxQR::Encoder *m_enc;
+    int m_currentFrame = 0;
+
 public:
     MAKE_PROPERTY(QFile*, file, File);
 
@@ -22,5 +26,8 @@ public:
     ~MainWindow() override;
 
 private:
+    void showFrame();
+
+
     Ui::MainWindow *ui;
 };

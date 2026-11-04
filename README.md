@@ -8,6 +8,8 @@ Compiles to a single JS file (~60kb) and a `.d.ts` for typescript.
 
 See `qt-demo/`. The decoder has a method that you can pass decoded QR code data, meaning you can do QR code reading natively and not in the JS.
 
+![](qt-demo/demo.gif)
+
 ---
 
 # txqr (TypeScript)
@@ -38,13 +40,13 @@ deno task serve:https  # same on https://<host>:8443/, needed for phone cameras
 ## Usage
 
 ```js
-import { Encoder, Decoder } from "./txqr.mjs";
+import * as TxQR from "./txqr.mjs";
 
-const enc = new Encoder(bytesOrString, { chunkSize: 100 });
+const enc = new TxQR.Encoder(bytesOrString, { chunkSize: 100 });
 // Cycle through frames 0..enc.frameCount-1 on your own timer, showing each with
 // enc.renderSVG(i), renderImage(i) (RGBA pixels) or renderMatrix(i) (module grid).
 
-const dec = new Decoder();
+const dec = new TxQR.Decoder();
 dec.pushImage({ width, height, data });  // camera frame, RGBA (or set opts.format)
 if (dec.complete) use(dec.bytes());
 ```
@@ -61,10 +63,10 @@ dec.pushBytes(raw);  // or its raw payload bytes (Uint8Array or ArrayBuffer)
 ```
 
 Both return `true` once the message is complete. They throw on content that isn't a txqr
-frame, so if the scanner may see other QR codes, filter them with `Decoder.isFrame(x)`,
+frame, so if the scanner may see other QR codes, filter them with `TxQR.Decoder.isFrame(x)`,
 which accepts the same inputs. `pushImage` ignores other QR codes itself.
 
-From QML: `import "txqr.mjs" as Txqr`, then `new Txqr.Encoder(...)`. Qt 6.8's
+From QML: `import "txqr.mjs" as TxQR`, then `new TxQR.Encoder(...)`. Qt 6.8's
 incremental garbage collector can crash under this library's allocation load. Set
 `QV4_GC_TIMELIMIT=0` in the app's environment to avoid it.
 

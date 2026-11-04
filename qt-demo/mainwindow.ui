@@ -55,18 +55,51 @@
        <item row="0" column="0">
         <widget class="QLabel" name="label">
          <property name="text">
-          <string>Chunk size (B)</string>
+          <string>Chunk size</string>
          </property>
         </widget>
        </item>
        <item row="0" column="1">
-        <widget class="QSpinBox" name="spinBox"/>
+        <widget class="QSpinBox" name="chunkSize">
+         <property name="suffix">
+          <string>bytes</string>
+         </property>
+         <property name="prefix">
+          <string/>
+         </property>
+         <property name="maximum">
+          <number>1000</number>
+         </property>
+         <property name="singleStep">
+          <number>100</number>
+         </property>
+         <property name="value">
+          <number>100</number>
+         </property>
+        </widget>
        </item>
        <item row="1" column="1">
-        <widget class="QSpinBox" name="spinBox_2"/>
+        <widget class="QSpinBox" name="red">
+         <property name="value">
+          <number>2</number>
+         </property>
+        </widget>
        </item>
        <item row="2" column="1">
-        <widget class="QSpinBox" name="spinBox_3"/>
+        <widget class="QSpinBox" name="period">
+         <property name="suffix">
+          <string>ms</string>
+         </property>
+         <property name="maximum">
+          <number>2000</number>
+         </property>
+         <property name="singleStep">
+          <number>100</number>
+         </property>
+         <property name="value">
+          <number>100</number>
+         </property>
+        </widget>
        </item>
        <item row="1" column="0">
         <widget class="QLabel" name="label_2">
@@ -78,7 +111,7 @@
        <item row="2" column="0">
         <widget class="QLabel" name="label_3">
          <property name="text">
-          <string>Frame duration (ms)</string>
+          <string>Frame duration</string>
          </property>
         </widget>
        </item>
@@ -90,7 +123,7 @@
         </widget>
        </item>
        <item row="3" column="1">
-        <widget class="QComboBox" name="comboBox">
+        <widget class="QComboBox" name="errorCor">
          <property name="currentIndex">
           <number>1</number>
          </property>
@@ -120,33 +153,34 @@
      </widget>
     </item>
     <item>
-     <widget class="QQuickWidget" name="quickWidget">
+     <widget class="QLabel" name="qr">
       <property name="sizePolicy">
-       <sizepolicy hsizetype="Preferred" vsizetype="MinimumExpanding">
+       <sizepolicy hsizetype="Ignored" vsizetype="Ignored">
         <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
+        <verstretch>1</verstretch>
        </sizepolicy>
       </property>
-      <property name="resizeMode">
-       <enum>QQuickWidget::ResizeMode::SizeRootObjectToView</enum>
+      <property name="minimumSize">
+       <size>
+        <width>100</width>
+        <height>100</height>
+       </size>
       </property>
-      <property name="source">
-       <url>
-        <string>qrc:/main.qml</string>
-       </url>
+      <property name="frameShape">
+       <enum>QFrame::Shape::Panel</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Shadow::Sunken</enum>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignCenter</set>
       </property>
      </widget>
     </item>
    </layout>
   </widget>
+  <widget class="QStatusBar" name="statusBar"/>
  </widget>
- <customwidgets>
-  <customwidget>
-   <class>QQuickWidget</class>
-   <extends>QWidget</extends>
-   <header location="global">QtQuickWidgets/QQuickWidget</header>
-  </customwidget>
- </customwidgets>
  <resources/>
  <connections/>
 </ui>

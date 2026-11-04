@@ -12,6 +12,7 @@ qt_add_executable(qt_demo
     mainwindow.cpp
     mainwindow.h
     mainwindow.ui
+	wrapper.cpp
 )
 
 # Embed main.qml so the .ui can refer to it as qrc:/main.qml.
