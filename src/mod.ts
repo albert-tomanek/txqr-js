@@ -118,9 +118,9 @@ export class Encoder {
   readonly blockCount: number;
   /** Number of frames in one animation loop. */
   readonly frameCount: number;
-  #blocks: Uint8Array[];
-  #crc: number;
-  #frames: (string | undefined)[];
+  private _blocks: Uint8Array[];
+  private _crc: number;
+  private _frames: (string | undefined)[];
 
   /** Strings are encoded as UTF-8. */
   constructor(data: Uint8Array | string, options: EncoderOptions = {}) {
@@ -133,12 +133,12 @@ export class Encoder {
     if (!(o.frameDuration > 0)) throw new RangeError(`invalid frameDuration: ${o.frameDuration}`);
     this.options = Object.freeze(o);
     this.size = bytes.length;
-    this.#blocks = splitBlocks(bytes, o.chunkSize);
-    this.blockCount = this.#blocks.length;
-    this.#crc = crc32(bytes);
+    this._blocks = splitBlocks(bytes, o.chunkSize);
+    this.blockCount = this._blocks.length;
+    this._crc = crc32(bytes);
     // A single block gains nothing from repetition within a loop.
     this.frameCount = this.blockCount === 1 ? 1 : Math.ceil(this.blockCount * o.redundancy);
-    this.#frames = new Array(this.frameCount);
+    this._frames = new Array(this.frameCount);
   }
 
   /**
@@ -149,16 +149,16 @@ export class Encoder {
     if (!(Number.isInteger(code) && code >= 0 && code < 1e9)) {
       throw new RangeError(`invalid frame code: ${code}`);
     }
-    const cached = this.#frames[code];
+    const cached = this._frames[code];
     if (cached !== undefined) return cached;
     const text = formatFrame({
       code,
       chunkSize: this.options.chunkSize,
       size: this.size,
-      crc: this.#crc,
-      data: encodeBlock(this.#blocks, code),
+      crc: this._crc,
+      data: encodeBlock(this._blocks, code),
     });
-    if (code < this.frameCount) this.#frames[code] = text;
+    if (code < this.frameCount) this._frames[code] = text;
     return text;
   }
 
@@ -207,64 +207,86 @@ export function encode(data: Uint8Array | string, options?: EncoderOptions): str
 /**
  * Reassembles a message from frames, in any order, with gaps and repeats.
  *
+ * Feed it in one of two ways:
+ * - {@link Decoder.pushImage}: camera pixels; the QR code is read in JS.
+ * - {@link Decoder.push} / {@link Decoder.pushBytes}: the content of a QR code
+ *   your host already decoded (e.g. natively with ZXing or a platform
+ *   scanner), so no QR decoding runs in JS at all.
+ *
  * Frames from a different transfer (other size, chunk size or checksum)
  * restart the decoder while incomplete; once complete it ignores everything
  * until {@link Decoder.reset}.
  */
 export class Decoder {
-  #maxSize: number;
-  #maxBlocks: number;
-  #key = "";
-  #size = 0;
-  #chunkSize = 0;
-  #k = 0;
-  #crc = 0;
-  #solver: Solver | undefined;
-  #seen = new Set<number>();
-  #result: Uint8Array | undefined;
+  private _maxSize: number;
+  private _maxBlocks: number;
+  private _key = "";
+  private _size = 0;
+  private _chunkSize = 0;
+  private _k = 0;
+  private _crc = 0;
+  private _solver: Solver | undefined;
+  private _seen = new Set<number>();
+  private _result: Uint8Array | undefined;
 
   constructor(options: DecoderOptions = {}) {
-    this.#maxSize = options.maxSize ?? 64 * 1024 * 1024;
-    this.#maxBlocks = options.maxBlocks ?? 16384;
+    this._maxSize = options.maxSize ?? 64 * 1024 * 1024;
+    this._maxBlocks = options.maxBlocks ?? 16384;
   }
 
-  /** Whether text is a well-formed txqr frame. */
-  static isFrame(text: string): boolean {
-    return parseFrame(text) !== undefined;
+  /** Whether a decoded QR code's content (text or raw bytes) is a txqr frame. */
+  static isFrame(frame: string | Uint8Array | ArrayBuffer): boolean {
+    return parseFrame(frameText(frame)) !== undefined;
   }
 
   /**
-   * Adds one frame's text. Returns true once the message is complete.
-   * Throws on text that isn't a txqr frame (see {@link Decoder.isFrame}).
+   * Adds the text content of one decoded QR code. Use this (or
+   * {@link Decoder.pushBytes}) when the QR code was decoded outside this
+   * library, so no QR decoding runs in JS. Returns true once the message is
+   * complete. Throws on text that isn't a txqr frame (check with
+   * {@link Decoder.isFrame} first if the scanner may see other QR codes).
    */
   push(text: string): boolean {
-    if (this.#result) return true;
+    if (this._result) return true;
     const f = parseFrame(text);
     if (!f) throw new TypeError(`invalid txqr frame: ${JSON.stringify(text.slice(0, 40))}`);
     const key = `${f.chunkSize}/${f.size}/${f.crc}`;
-    if (key !== this.#key) this.#start(key, f.size, f.chunkSize, f.crc);
+    if (key !== this._key) this._start(key, f.size, f.chunkSize, f.crc);
     // Cameras see the same frame many times in a row; skip repeats cheaply.
-    if (this.#seen.has(f.code)) return false;
-    this.#seen.add(f.code);
+    if (this._seen.has(f.code)) return false;
+    this._seen.add(f.code);
 
-    const solver = this.#solver!;
-    solver.add(blockIndices(f.code, this.#k), f.data);
-    if (solver.rank < this.#k) return false;
+    const solver = this._solver!;
+    solver.add(blockIndices(f.code, this._k), f.data);
+    if (solver.rank < this._k) return false;
 
-    const out = new Uint8Array(this.#size);
-    solver.solve().forEach((b, i) => out.set(b.subarray(0, Math.min(b.length, this.#size - i * b.length)), i * b.length));
-    if (crc32(out) !== this.#crc) {
+    const out = new Uint8Array(this._size);
+    solver.solve().forEach((b, i) => out.set(b.subarray(0, Math.min(b.length, this._size - i * b.length)), i * b.length));
+    if (crc32(out) !== this._crc) {
       this.reset();
       throw new Error("txqr: checksum mismatch in reassembled data");
     }
-    this.#result = out;
-    this.#solver = undefined;
+    this._result = out;
+    this._solver = undefined;
     return true;
   }
 
   /**
-   * Reads a QR code from an image and pushes it if it's a txqr frame.
-   * Returns true once the message is complete.
+   * Like {@link Decoder.push}, for a QR code's raw payload bytes as returned
+   * by native decoders (e.g. ZXing's `bytes()`), or bytes handed over from a
+   * host as an ArrayBuffer. Frames are ASCII, so the bytes are the frame text.
+   * Returns true once the message is complete; throws on non-frames.
+   */
+  pushBytes(bytes: Uint8Array | ArrayBuffer): boolean {
+    return this.push(frameText(bytes));
+  }
+
+  /**
+   * Reads a QR code from image pixels in JS and pushes it if it's a txqr
+   * frame; other QR codes and frames without one are ignored. To skip
+   * JS-side QR decoding, decode natively and use {@link Decoder.push} or
+   * {@link Decoder.pushBytes} instead. Returns true once the message is
+   * complete.
    */
   pushImage(image: Image, opts?: ReadOptions): boolean {
     const text = qrRead(image, opts);
@@ -272,54 +294,54 @@ export class Decoder {
     return this.push(text);
   }
 
-  #start(key: string, size: number, chunkSize: number, crc: number): void {
+  private _start(key: string, size: number, chunkSize: number, crc: number): void {
     const k = blockCount(size, chunkSize);
-    if (size > this.#maxSize) throw new RangeError(`txqr: message of ${size} bytes exceeds maxSize`);
-    if (k > this.#maxBlocks) throw new RangeError(`txqr: ${k} blocks exceeds maxBlocks`);
+    if (size > this._maxSize) throw new RangeError(`txqr: message of ${size} bytes exceeds maxSize`);
+    if (k > this._maxBlocks) throw new RangeError(`txqr: ${k} blocks exceeds maxBlocks`);
     this.reset();
-    this.#key = key;
-    this.#size = size;
-    this.#chunkSize = chunkSize;
-    this.#k = k;
-    this.#crc = crc;
-    this.#solver = new Solver(k);
+    this._key = key;
+    this._size = size;
+    this._chunkSize = chunkSize;
+    this._k = k;
+    this._crc = crc;
+    this._solver = new Solver(k);
   }
 
   /** Whether the whole message has been recovered. */
   get complete(): boolean {
-    return this.#result !== undefined;
+    return this._result !== undefined;
   }
 
   /** Message size in bytes (0 until the first frame). */
   get size(): number {
-    return this.#size;
+    return this._size;
   }
 
   /** Chunk size of the current transfer (0 until the first frame). */
   get chunkSize(): number {
-    return this.#chunkSize;
+    return this._chunkSize;
   }
 
   /** Number of source blocks needed (0 until the first frame). */
   get blockCount(): number {
-    return this.#k;
+    return this._k;
   }
 
   /** Distinct frames received for the current transfer. */
   get received(): number {
-    return this.#seen.size;
+    return this._seen.size;
   }
 
   /** Fraction recovered so far, 0..1. */
   get progress(): number {
-    if (this.#result) return 1;
-    return this.#k === 0 ? 0 : this.#solver!.rank / this.#k;
+    if (this._result) return 1;
+    return this._k === 0 ? 0 : this._solver!.rank / this._k;
   }
 
   /** The recovered message. Throws if not complete. */
   bytes(): Uint8Array {
-    if (!this.#result) throw new Error("txqr: message not complete");
-    return this.#result;
+    if (!this._result) throw new Error("txqr: message not complete");
+    return this._result;
   }
 
   /** The recovered message decoded as UTF-8. Throws if not complete. */
@@ -329,11 +351,24 @@ export class Decoder {
 
   /** Forgets everything, ready for a new transfer. */
   reset(): void {
-    this.#key = "";
-    this.#size = this.#chunkSize = this.#k = this.#crc = 0;
-    this.#solver = this.#result = undefined;
-    this.#seen = new Set();
+    this._key = "";
+    this._size = this._chunkSize = this._k = this._crc = 0;
+    this._solver = this._result = undefined;
+    this._seen = new Set();
   }
+}
+
+// Frames are ASCII, so bytes map 1:1 to characters; anything else fails parsing.
+function frameText(frame: string | Uint8Array | ArrayBuffer): string {
+  if (typeof frame === "string") return frame;
+  const bytes = ArrayBuffer.isView(frame)
+    ? new Uint8Array(frame.buffer, frame.byteOffset, frame.byteLength)
+    : new Uint8Array(frame);
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 8192) {
+    out += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 8192)));
+  }
+  return out;
 }
 
 function stripUndefined<T extends object>(o: T): Partial<T> {

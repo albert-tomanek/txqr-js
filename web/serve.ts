@@ -12,7 +12,9 @@
 
 const ROUTES: Record<string, [string, string]> = {
   "/": ["web/index.html", "text/html; charset=utf-8"],
-  "/txqr.js": ["dist/txqr.js", "text/javascript; charset=utf-8"],
+  "/app.js": ["web/app.js", "text/javascript; charset=utf-8"],
+  "/txqr.mjs": ["dist/txqr.mjs", "text/javascript; charset=utf-8"],
+  "/demo.html": ["dist/demo.html", "text/html; charset=utf-8"],
 };
 
 const https = Deno.args.includes("--https");

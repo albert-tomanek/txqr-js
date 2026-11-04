@@ -159,3 +159,25 @@ Deno.test("SVG output has the requested size", () => {
   const svg = new Encoder("hello", { size: 123 }).renderSVG(0);
   assert(svg.startsWith("<svg") && svg.includes('width="123"'));
 });
+
+Deno.test("pushBytes takes natively decoded QR payloads", () => {
+  const data = randomBytes(3000, 9);
+  const e = new Encoder(data);
+  const d = new Decoder();
+  const ascii = (s: string) => Uint8Array.from(s, (c) => c.charCodeAt(0));
+  assert(Decoder.isFrame(ascii(e.frame(0))));
+  assert(!Decoder.isFrame(ascii("https://example.com")));
+  for (let i = 0; !d.complete; i++) {
+    const bytes = ascii(e.frame(i));
+    // Alternate Uint8Array, ArrayBuffer and an offset view into a bigger buffer.
+    if (i % 3 === 0) d.pushBytes(bytes);
+    else if (i % 3 === 1) d.pushBytes(bytes.buffer);
+    else {
+      const big = new Uint8Array(bytes.length + 8);
+      big.set(bytes, 4);
+      d.pushBytes(big.subarray(4, 4 + bytes.length));
+    }
+  }
+  assertEquals(d.bytes(), data);
+  assertThrows(() => new Decoder().pushBytes(ascii("not a frame")), TypeError);
+});

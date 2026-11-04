@@ -1,20 +1,36 @@
+A mostly vibe-coded TypeScript rewrite of [divan/txqr](https://github.com/divan/txqr). Written for use in both web and desktop apps.
+
+### Web
+
+Compiles to a single JS file (~60kb) and a `.d.ts` for typescript.
+
+### Desktop
+
+See `qt-demo/`. The decoder has a method that you can pass decoded QR code data, meaning you can do QR code reading natively and not in the JS.
+
+---
+
 # txqr (TypeScript)
 
-A TypeScript rewrite of the library parts of [divan/txqr](https://github.com/divan/txqr):
 send data through an animated sequence of QR codes. It uses a fountain code, so the
 receiver can start at any frame and recover from missed frames.
 
-It builds to one self-contained ES module, `dist/txqr.js`, with paulmillr's
-[`qr`](https://github.com/paulmillr/qr) included. Types are in `dist/txqr.d.ts`. The
-module uses only plain ECMAScript (no DOM, `TextEncoder` or timers), so the same file
-runs in browsers and in QuickJS.
+Build output (committed, so it can be used without building):
+
+- `dist/txqr.mjs`: one self-contained ES module, with paulmillr's
+  [`qr`](https://github.com/paulmillr/qr) included. It uses only ES2016 and plain
+  ECMAScript (no DOM, `TextEncoder` or timers), so the same file runs in browsers,
+  QuickJS and Qt's QML engine.
+- `dist/txqr.d.ts`: TypeScript declarations.
+- `dist/demo.html`: the test page as one static file. Open it directly; no server needed.
 
 ## Tasks (Deno)
 
 ```sh
-deno task build   # type-check, then write dist/txqr.js + dist/txqr.d.ts
-deno task test    # Deno tests on the source, then QuickJS on dist/txqr.js (needs qjs)
-deno task check   # type-check everything
+deno task build        # type-check, then write everything in dist/
+deno task test         # Deno tests on the source, then QuickJS on dist/txqr.mjs (needs qjs)
+deno task test:qml     # Qt QML engine on dist/txqr.mjs (needs qml6, Qt 6.8+)
+deno task check        # type-check everything
 deno task serve        # test page on http://<host>:8000/ (build first)
 deno task serve:https  # same on https://<host>:8443/, needed for phone cameras
 ```
@@ -22,7 +38,7 @@ deno task serve:https  # same on https://<host>:8443/, needed for phone cameras
 ## Usage
 
 ```js
-import { Encoder, Decoder } from "./txqr.js";
+import { Encoder, Decoder } from "./txqr.mjs";
 
 const enc = new Encoder(bytesOrString, { chunkSize: 100, frameDuration: 200 });
 // Show enc.renderSVG(enc.indexAt(elapsedMs)), or use renderImage() for RGBA pixels
@@ -30,9 +46,27 @@ const enc = new Encoder(bytesOrString, { chunkSize: 100, frameDuration: 200 });
 
 const dec = new Decoder();
 dec.pushImage({ width, height, data });  // camera frame, RGBA (or set opts.format)
-// ...or dec.push(frameText) if you read the QR codes yourself
 if (dec.complete) use(dec.bytes());
 ```
+
+### Decoding QR codes outside JS
+
+QR reading from pixels is the slowest part in embedded engines. You can skip it
+entirely: decode the QR codes natively (e.g. with ZXing or a platform scanner) and pass
+only each code's content to the decoder:
+
+```js
+dec.push(qrText);    // the decoded QR code as a string
+dec.pushBytes(raw);  // or its raw payload bytes (Uint8Array or ArrayBuffer)
+```
+
+Both return `true` once the message is complete. They throw on content that isn't a txqr
+frame, so if the scanner may see other QR codes, filter them with `Decoder.isFrame(x)`,
+which accepts the same inputs. `pushImage` ignores other QR codes itself.
+
+From QML: `import "txqr.mjs" as Txqr`, then `new Txqr.Encoder(...)`. Qt 6.8's
+incremental garbage collector can crash under this library's allocation load. Set
+`QV4_GC_TIMELIMIT=0` in the app's environment to avoid it.
 
 Options and their defaults (from the original `txqr-gif` tool), exported as `DEFAULTS`:
 

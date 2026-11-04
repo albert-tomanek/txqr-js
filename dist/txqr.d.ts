@@ -80,15 +80,18 @@ export declare function readQR(
 ): string | undefined;
 /** Splits data into QR frame texts. */
 export declare class Encoder {
-  #private;
-  /** Effective settings, defaults filled in. */
-  readonly options: Readonly<Required<EncoderOptions>>;
+  /** Effective settings, defaults filled in. */ readonly options: Readonly<
+    Required<EncoderOptions>
+  >;
   /** Message length in bytes. */
   readonly size: number;
   /** Number of source blocks (k). */
   readonly blockCount: number;
   /** Number of frames in one animation loop. */
   readonly frameCount: number;
+  private _blocks;
+  private _crc;
+  private _frames;
   /** Strings are encoded as UTF-8. */
   constructor(data: Uint8Array | string, options?: EncoderOptions);
   /**
@@ -119,25 +122,54 @@ export declare function encode(
 /**
  * Reassembles a message from frames, in any order, with gaps and repeats.
  *
+ * Feed it in one of two ways:
+ * - {@link Decoder.pushImage}: camera pixels; the QR code is read in JS.
+ * - {@link Decoder.push} / {@link Decoder.pushBytes}: the content of a QR code
+ *   your host already decoded (e.g. natively with ZXing or a platform
+ *   scanner), so no QR decoding runs in JS at all.
+ *
  * Frames from a different transfer (other size, chunk size or checksum)
  * restart the decoder while incomplete; once complete it ignores everything
  * until {@link Decoder.reset}.
  */
 export declare class Decoder {
-  #private;
+  private _maxSize;
+  private _maxBlocks;
+  private _key;
+  private _size;
+  private _chunkSize;
+  private _k;
+  private _crc;
+  private _solver;
+  private _seen;
+  private _result;
   constructor(options?: DecoderOptions);
-  /** Whether text is a well-formed txqr frame. */
-  static isFrame(text: string): boolean;
+  /** Whether a decoded QR code's content (text or raw bytes) is a txqr frame. */
+  static isFrame(frame: string | Uint8Array | ArrayBuffer): boolean;
   /**
-   * Adds one frame's text. Returns true once the message is complete.
-   * Throws on text that isn't a txqr frame (see {@link Decoder.isFrame}).
+   * Adds the text content of one decoded QR code. Use this (or
+   * {@link Decoder.pushBytes}) when the QR code was decoded outside this
+   * library, so no QR decoding runs in JS. Returns true once the message is
+   * complete. Throws on text that isn't a txqr frame (check with
+   * {@link Decoder.isFrame} first if the scanner may see other QR codes).
    */
   push(text: string): boolean;
   /**
-   * Reads a QR code from an image and pushes it if it's a txqr frame.
-   * Returns true once the message is complete.
+   * Like {@link Decoder.push}, for a QR code's raw payload bytes as returned
+   * by native decoders (e.g. ZXing's `bytes()`), or bytes handed over from a
+   * host as an ArrayBuffer. Frames are ASCII, so the bytes are the frame text.
+   * Returns true once the message is complete; throws on non-frames.
+   */
+  pushBytes(bytes: Uint8Array | ArrayBuffer): boolean;
+  /**
+   * Reads a QR code from image pixels in JS and pushes it if it's a txqr
+   * frame; other QR codes and frames without one are ignored. To skip
+   * JS-side QR decoding, decode natively and use {@link Decoder.push} or
+   * {@link Decoder.pushBytes} instead. Returns true once the message is
+   * complete.
    */
   pushImage(image: Image, opts?: ReadOptions): boolean;
+  private _start;
   /** Whether the whole message has been recovered. */
   get complete(): boolean;
   /** Message size in bytes (0 until the first frame). */

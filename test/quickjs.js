@@ -1,8 +1,8 @@
 // Smoke test of the built bundle under QuickJS: `qjs --std test/quickjs.js`
-// (run `deno task build` first). Proves dist/txqr.js needs nothing beyond
+// (run `deno task build` first). Proves dist/txqr.mjs needs nothing beyond
 // plain ECMAScript.
 import * as std from "std";
-import { DEFAULTS, Decoder, Encoder, fromBase64, readQR, renderImage, toBase64 } from "../dist/txqr.js";
+import { DEFAULTS, Decoder, Encoder, fromBase64, readQR, renderImage, toBase64 } from "../dist/txqr.mjs";
 
 let failed = 0;
 function check(name, fn) {
@@ -55,6 +55,20 @@ check("binary through rendered pixels", () => {
   for (let i = 0; !d.complete; i++) {
     d.pushImage(e.renderImage(i));
     assert(i < e.frameCount, "did not converge");
+  }
+  assert(bytesEqual(d.bytes(), data), "bytes mismatch");
+});
+
+check("pushBytes (natively decoded payloads)", () => {
+  const data = randomBytes(2000, 11);
+  const e = new Encoder(data);
+  const d = new Decoder();
+  for (let i = 0; !d.complete; i++) {
+    const s = e.frame(i);
+    const bytes = new Uint8Array(s.length);
+    for (let j = 0; j < s.length; j++) bytes[j] = s.charCodeAt(j);
+    d.pushBytes(i % 2 ? bytes : bytes.buffer);
+    assert(i < 100, "did not converge");
   }
   assert(bytesEqual(d.bytes(), data), "bytes mismatch");
 });

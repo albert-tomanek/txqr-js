@@ -1,0 +1,3 @@
+# Qt Creator build output and per-user settings
+qt-demo/build/
+*.user

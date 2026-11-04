@@ -69,33 +69,33 @@ type Row = { coef: Uint32Array; data: Uint8Array };
 export class Solver {
   readonly k: number;
   rank = 0;
-  #words: number;
-  #rows: (Row | undefined)[];
+  private _words: number;
+  private _rows: (Row | undefined)[];
 
   constructor(k: number) {
     this.k = k;
-    this.#words = (k + 31) >>> 5;
-    this.#rows = new Array(k);
+    this._words = (k + 31) >>> 5;
+    this._rows = new Array(k);
   }
 
   /** Adds one equation; returns true if it was linearly independent. */
   add(indices: number[], data: Uint8Array): boolean {
-    const coef = new Uint32Array(this.#words);
+    const coef = new Uint32Array(this._words);
     for (const i of indices) coef[i >>> 5] ^= 1 << (i & 31);
     const buf = data.slice();
     let w = 0;
     for (;;) {
-      while (w < this.#words && coef[w] === 0) w++;
-      if (w === this.#words) return false;
+      while (w < this._words && coef[w] === 0) w++;
+      if (w === this._words) return false;
       const col = (w << 5) + ctz(coef[w]);
-      const pivot = this.#rows[col];
+      const pivot = this._rows[col];
       if (!pivot) {
-        this.#rows[col] = { coef, data: buf };
+        this._rows[col] = { coef, data: buf };
         this.rank++;
         return true;
       }
       // pivot has no bits below col, so earlier words need no work.
-      for (let j = w; j < this.#words; j++) coef[j] ^= pivot.coef[j];
+      for (let j = w; j < this._words; j++) coef[j] ^= pivot.coef[j];
       xorInto(buf, pivot.data);
     }
   }
@@ -103,10 +103,10 @@ export class Solver {
   /** Back-substitutes and returns the source blocks. Requires full rank. */
   solve(): Uint8Array[] {
     if (this.rank < this.k) throw new Error("solver: not enough equations");
-    const rows = this.#rows as Row[];
+    const rows = this._rows as Row[];
     for (let col = this.k - 1; col >= 0; col--) {
       const row = rows[col];
-      for (let w = col >>> 5; w < this.#words; w++) {
+      for (let w = col >>> 5; w < this._words; w++) {
         let x = row.coef[w];
         if (w === col >>> 5) x &= ~((2 << (col & 31)) - 1); // only bits above col
         while (x !== 0) {
