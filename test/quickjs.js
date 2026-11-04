@@ -33,7 +33,7 @@ function randomBytes(n, seed) {
 }
 
 check("defaults", () => {
-  assert(DEFAULTS.chunkSize === 100 && DEFAULTS.frameDuration === 200 && DEFAULTS.size === 300);
+  assert(DEFAULTS.chunkSize === 100 && DEFAULTS.size === 300 && !("frameDuration" in DEFAULTS));
 });
 
 check("text round-trip with loss", () => {

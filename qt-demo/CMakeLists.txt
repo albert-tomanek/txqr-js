@@ -17,7 +17,7 @@ qt_add_executable(qt_demo
 # Embed main.qml so the .ui can refer to it as qrc:/main.qml.
 qt_add_resources(qt_demo "qml"
     PREFIX "/"
-    FILES main.qml
+	FILES main.qml ../dist/txqr.mjs
 )
 
 target_link_libraries(qt_demo PRIVATE Qt6::Core Qt6::Widgets Qt6::QuickWidgets)

@@ -52,9 +52,9 @@ Deno.test("utf8 and base64 helpers match the web platform", () => {
 Deno.test("defaults come from the original txqr tools", () => {
   assertEquals(DEFAULTS.chunkSize, 100);
   assertEquals(DEFAULTS.redundancy, 2);
-  assertEquals(DEFAULTS.frameDuration, 200);
   assertEquals(DEFAULTS.size, 300);
   assertEquals(DEFAULTS.ecc, "medium");
+  assert(!("frameDuration" in DEFAULTS), "frame timing belongs to the app");
   const e = new Encoder("x".repeat(1000));
   assertEquals(e.blockCount, 10);
   assertEquals(e.frameCount, 20);
@@ -128,15 +128,6 @@ Deno.test("rejects malformed frames and oversized transfers", () => {
   assert(!Decoder.isFrame("0/100/5/00000000:ABC")); // wrong payload length
   assertThrows(() => d.push("hello"), TypeError);
   assertThrows(() => d.push(new Encoder(randomBytes(1000)).frame(0)), RangeError);
-});
-
-Deno.test("animation timing", () => {
-  const e = new Encoder(randomBytes(1000), { frameDuration: 100 });
-  assertEquals(e.loopDuration, 2000);
-  assertEquals(e.indexAt(0), 0);
-  assertEquals(e.indexAt(250), 2);
-  assertEquals(e.indexAt(2050), 0);
-  assertEquals(e.frameAt(250), e.frame(2));
 });
 
 Deno.test("render -> read round-trip through pixels", () => {

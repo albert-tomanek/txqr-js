@@ -34,7 +34,7 @@ QtObject {
 
     Component.onCompleted: {
         const tests = {
-            "defaults": () => Txqr.DEFAULTS.chunkSize === 100 && Txqr.DEFAULTS.frameDuration === 200,
+            "defaults": () => Txqr.DEFAULTS.chunkSize === 100 && !("frameDuration" in Txqr.DEFAULTS),
             "text round-trip with loss": () => {
                 const msg = "Hello from QML ünïcödé 😀 ".repeat(40);
                 const e = new Txqr.Encoder(msg);

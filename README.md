@@ -40,9 +40,9 @@ deno task serve:https  # same on https://<host>:8443/, needed for phone cameras
 ```js
 import { Encoder, Decoder } from "./txqr.mjs";
 
-const enc = new Encoder(bytesOrString, { chunkSize: 100, frameDuration: 200 });
-// Show enc.renderSVG(enc.indexAt(elapsedMs)), or use renderImage() for RGBA pixels
-// or renderMatrix() for the raw module grid.
+const enc = new Encoder(bytesOrString, { chunkSize: 100 });
+// Cycle through frames 0..enc.frameCount-1 on your own timer, showing each with
+// enc.renderSVG(i), renderImage(i) (RGBA pixels) or renderMatrix(i) (module grid).
 
 const dec = new Decoder();
 dec.pushImage({ width, height, data });  // camera frame, RGBA (or set opts.format)
@@ -74,10 +74,12 @@ Options and their defaults (from the original `txqr-gif` tool), exported as `DEF
 | --------------- | ---------- | -------------------------------------- |
 | `chunkSize`     | 100        | payload bytes per frame                |
 | `redundancy`    | 2          | frames per loop = blocks × redundancy  |
-| `frameDuration` | 200 ms     | time each frame is shown (5 FPS)       |
 | `size`          | 300 px     | rendered QR width/height               |
 | `ecc`           | `"medium"` | `low` / `medium` / `quartile` / `high` |
 | `border`        | 4          | quiet zone, in modules                 |
+
+Frame timing is up to the app; the library has no clock. The original showed each
+frame for 200 ms (5 FPS), which is what the demo page defaults to.
 
 ## Differences from the Go original (not wire-compatible)
 

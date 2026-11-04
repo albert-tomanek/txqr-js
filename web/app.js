@@ -3,7 +3,11 @@
 import { DEFAULTS, Decoder, Encoder, readQR, utf8Decode } from "./txqr.mjs";
 
 const $ = (id) => document.getElementById(id);
-const PARAMS = ["chunkSize", "redundancy", "frameDuration", "size", "border", "ecc"];
+const PARAMS = ["chunkSize", "redundancy", "size", "border", "ecc"];
+// Frame timing is the app's job, not the library's. 200 ms (5 FPS) is the
+// original txqr-gif default.
+const DEFAULT_FRAME_DURATION = 200;
+let frameDuration = DEFAULT_FRAME_DURATION;
 
 let payload = null;     // Uint8Array from a chosen file, else the textarea is used
 let encoder = null;
@@ -17,6 +21,7 @@ let stream = null;
 
 function loadDefaults() {
   for (const p of PARAMS) $(p).value = DEFAULTS[p];
+  $("frameDuration").value = DEFAULT_FRAME_DURATION;
 }
 
 function options() {
@@ -28,6 +33,8 @@ function options() {
 function start() {
   stop();
   try {
+    frameDuration = Number($("frameDuration").value);
+    if (!(frameDuration > 0)) throw new RangeError(`invalid frame duration: ${frameDuration}`);
     encoder = new Encoder(payload ?? $("text").value, options());
   } catch (e) {
     $("sendStats").textContent = `error: ${e.message}`;
@@ -47,7 +54,7 @@ function stop() {
 function tick() {
   if (!encoder) return;
   const t = performance.now() - startTime;
-  const i = encoder.indexAt(t);
+  const i = Math.floor(t / frameDuration) % encoder.frameCount;
   if (i !== shown) {
     shown = i;
     try {
@@ -57,14 +64,13 @@ function tick() {
       stop();
       return;
     }
-    const o = encoder.options;
     $("sendStats").textContent =
       `size ${encoder.size} B, ${encoder.blockCount} blocks, ${encoder.frameCount} frames/loop\n` +
-      `${(1000 / o.frameDuration).toFixed(1)} FPS, loop ${(encoder.loopDuration / 1000).toFixed(1)} s\n` +
+      `${(1000 / frameDuration).toFixed(1)} FPS, loop ${((encoder.frameCount * frameDuration) / 1000).toFixed(1)} s\n` +
       `frame ${i}: ${encoder.frame(i).length} chars`;
     if ($("source").value === "loopback") receiveLoopback(i);
   }
-  const next = (Math.floor(t / encoder.options.frameDuration) + 1) * encoder.options.frameDuration;
+  const next = (Math.floor(t / frameDuration) + 1) * frameDuration;
   timer = setTimeout(tick, Math.max(0, next - t));
 }
 
@@ -159,7 +165,7 @@ $("file").onchange = async () => {
   const f = $("file").files[0];
   payload = f ? new Uint8Array(await f.arrayBuffer()) : null;
 };
-for (const p of PARAMS) $(p).onchange = () => { if (encoder) start(); };
+for (const p of [...PARAMS, "frameDuration"]) $(p).onchange = () => { if (encoder) start(); };
 
 loadDefaults();
 $("text").value = $("text").value.repeat(20);

@@ -34,8 +34,6 @@ export interface EncoderOptions extends RenderOptions {
   chunkSize?: number;
   /** Frames generated per source block, i.e. frameCount = blockCount * redundancy. Default 2. */
   redundancy?: number;
-  /** How long each frame stays on screen, in milliseconds. Default 200 (5 FPS). */
-  frameDuration?: number;
 }
 
 /** RGBA (or other `format`) pixel buffer; a canvas ImageData fits. */
@@ -68,11 +66,13 @@ export interface DecoderOptions {
   maxBlocks?: number;
 }
 
-/** Default encoder settings (from the original txqr-gif tool). */
+/**
+ * Default encoder settings (from the original txqr-gif tool). Frame timing
+ * is the app's job; the original showed each frame for 200 ms (5 FPS).
+ */
 export const DEFAULTS: Readonly<Required<EncoderOptions>> = Object.freeze({
   chunkSize: 100,
   redundancy: 2,
-  frameDuration: 200,
   size: 300,
   ecc: "medium",
   border: 4,
@@ -116,7 +116,10 @@ export class Encoder {
   readonly size: number;
   /** Number of source blocks (k). */
   readonly blockCount: number;
-  /** Number of frames in one animation loop. */
+  /**
+   * Number of frames in one animation loop. How long each is shown, and
+   * the loop itself, are up to the app: cycle through 0..frameCount-1.
+   */
   readonly frameCount: number;
   private _blocks: Uint8Array[];
   private _crc: number;
@@ -130,7 +133,6 @@ export class Encoder {
       throw new RangeError(`invalid chunkSize: ${o.chunkSize}`);
     }
     if (!(o.redundancy >= 1)) throw new RangeError(`invalid redundancy: ${o.redundancy}`);
-    if (!(o.frameDuration > 0)) throw new RangeError(`invalid frameDuration: ${o.frameDuration}`);
     this.options = Object.freeze(o);
     this.size = bytes.length;
     this._blocks = splitBlocks(bytes, o.chunkSize);
@@ -165,22 +167,6 @@ export class Encoder {
   /** All frames of one animation loop. */
   frames(): string[] {
     return Array.from({ length: this.frameCount }, (_, i) => this.frame(i));
-  }
-
-  /** Length of one animation loop in milliseconds. */
-  get loopDuration(): number {
-    return this.frameCount * this.options.frameDuration;
-  }
-
-  /** Index of the frame to show at a time (ms) since the animation started. */
-  indexAt(timeMs: number): number {
-    const i = Math.floor(timeMs / this.options.frameDuration) % this.frameCount;
-    return i < 0 ? i + this.frameCount : i;
-  }
-
-  /** Frame text to show at a time (ms) since the animation started. */
-  frameAt(timeMs: number): string {
-    return this.frame(this.indexAt(timeMs));
   }
 
   /** Frame `code` as an SVG string, using this encoder's render settings. */

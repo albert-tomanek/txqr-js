@@ -73,5 +73,7 @@ The same file must work in QuickJS and QV4, which lag behind browsers:
   small k. Changing the subset selection breaks compatibility with existing senders.
 - The CRC-32 doubles as a transfer id. An incomplete decoder restarts when the transfer
   changes. A complete one ignores input until `reset()`.
-- Defaults come from the Go `txqr-gif` tool: chunk 100 B, redundancy 2, 200 ms per
-  frame, 300 px, ECC medium, border 4.
+- Defaults come from the Go `txqr-gif` tool: chunk 100 B, redundancy 2, 300 px, ECC
+  medium, border 4.
+- Frame timing (how long each frame shows, looping) is the app's job. Keep the library
+  free of clocks and durations; the demo owns its 200 ms default.

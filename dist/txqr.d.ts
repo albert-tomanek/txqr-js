@@ -27,8 +27,6 @@ export interface EncoderOptions extends RenderOptions {
   /** Payload bytes carried per frame. Default 100. */ chunkSize?: number;
   /** Frames generated per source block, i.e. frameCount = blockCount * redundancy. Default 2. */
   redundancy?: number;
-  /** How long each frame stays on screen, in milliseconds. Default 200 (5 FPS). */
-  frameDuration?: number;
 }
 /** RGBA (or other `format`) pixel buffer; a canvas ImageData fits. */
 export interface Image {
@@ -62,7 +60,10 @@ export interface DecoderOptions {
   /** Largest accepted number of source blocks. Default 16384. */
   maxBlocks?: number;
 }
-/** Default encoder settings (from the original txqr-gif tool). */
+/**
+ * Default encoder settings (from the original txqr-gif tool). Frame timing
+ * is the app's job; the original showed each frame for 200 ms (5 FPS).
+ */
 export declare const DEFAULTS: Readonly<Required<EncoderOptions>>;
 /** Renders any text (normally a frame) as a QR code SVG string. */
 export declare function renderSVG(text: string, opts?: RenderOptions): string;
@@ -87,7 +88,10 @@ export declare class Encoder {
   readonly size: number;
   /** Number of source blocks (k). */
   readonly blockCount: number;
-  /** Number of frames in one animation loop. */
+  /**
+   * Number of frames in one animation loop. How long each is shown, and
+   * the loop itself, are up to the app: cycle through 0..frameCount-1.
+   */
   readonly frameCount: number;
   private _blocks;
   private _crc;
@@ -101,12 +105,6 @@ export declare class Encoder {
   frame(code: number): string;
   /** All frames of one animation loop. */
   frames(): string[];
-  /** Length of one animation loop in milliseconds. */
-  get loopDuration(): number;
-  /** Index of the frame to show at a time (ms) since the animation started. */
-  indexAt(timeMs: number): number;
-  /** Frame text to show at a time (ms) since the animation started. */
-  frameAt(timeMs: number): string;
   /** Frame `code` as an SVG string, using this encoder's render settings. */
   renderSVG(code: number): string;
   /** Frame `code` as an RGBA image, using this encoder's render settings. */
