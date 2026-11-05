@@ -27,6 +27,20 @@ Build output (committed, so it can be used without building):
   QuickJS and Qt's QML engine.
 - `dist/txqr.d.ts`: TypeScript declarations.
 - `dist/demo.html`: the test page as one static file. Open it directly; no server needed.
+- `dist/sw.js`, `dist/manifest.webmanifest`: optional, make the demo an installable app
+  (see below).
+
+## Installing the demo on Android
+
+Host `demo.html`, `sw.js` and `manifest.webmanifest` together on an https site (or use
+`deno task serve`), open `demo.html` in Chrome and choose "Install app" / "Add to home
+screen". The installed app then appears in Android's share sheet: sharing a file (or
+text or a link) to it opens the app and starts sending it.
+
+Service workers need a trusted secure origin, so this doesn't work over the test
+server's self-signed https. For a phone on the LAN, either forward the port over USB
+(`adb reverse tcp:8000 tcp:8000`, then open `http://localhost:8000/demo.html`) or add
+the server's address to `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
 
 ## Tasks (Deno)
 
@@ -80,7 +94,7 @@ Options and their defaults (from the original `txqr-gif` tool), exported as `DEF
 | `redundancy`    | 2          | frames per loop = blocks × redundancy  |
 | `size`          | 300 px     | rendered QR width/height               |
 | `ecc`           | `"medium"` | `low` / `medium` / `quartile` / `high` |
-| `border`        | 4          | quiet zone, in modules                 |
+| `border`        | 1          | quiet zone, in modules (at least 1)    |
 
 Frame timing is up to the app; the library has no clock. The original showed each
 frame for 200 ms (5 FPS), which is what the demo page defaults to.

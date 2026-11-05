@@ -1,6 +1,7 @@
 // Builds dist/txqr.mjs (one self-contained ES module, qr included),
 // dist/txqr.d.ts, and dist/demo.html (the test page with everything inlined,
-// usable without a server). Run with `deno task build`.
+// usable without a server). The demo's PWA files, sw.js and
+// manifest.webmanifest, are copied next to it. Run with `deno task build`.
 //
 // The bundle is lowered to ES2016 so Qt's QML engine (QV4, Qt 6.8) can load
 // it; QML also only imports ES modules named *.mjs. Browsers and QuickJS
@@ -55,6 +56,7 @@ await Deno.writeTextFile(
   "dist/demo.html",
   page.replace(tag, () => `<script type="module">${inline}</script>`),
 );
+for (const f of ["sw.js", "manifest.webmanifest"]) await Deno.copyFile(`web/${f}`, `dist/${f}`);
 
 // QV4 crashes on the WeakMaps esbuild emits for lowered #private fields; use
 // TypeScript `private` instead.

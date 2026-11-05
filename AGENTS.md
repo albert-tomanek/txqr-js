@@ -20,7 +20,12 @@ QuickJS (embedded in desktop apps) and Qt's QML engine (QV4).
 - `test/txqr.test.ts`: Deno tests. `test/quickjs.js` and `test/qml.qml` test the built
   bundle in QuickJS and Qt.
 - `web/index.html` + `web/app.js`: test page. `web/serve.ts`: dev server (http or https).
-- `dist/`: committed build output (`txqr.mjs`, `txqr.d.ts`, `demo.html`). Rebuild it
+- `web/sw.js` + `web/manifest.webmanifest`: make the demo an installable PWA and an
+  Android share target (the service worker stashes shared files in the Cache API and
+  opens `demo.html?shared`). Icons are inlined as data URLs, so the demo stays three
+  files. The build copies both into `dist/`.
+- `dist/`: committed build output (`txqr.mjs`, `txqr.d.ts`, `demo.html`, plus the PWA
+  files). Rebuild it
   after any change to `src/` or `web/`; never edit it by hand.
 - `README.md`: anything until the horizontal line is human written and should not be touched.
 
@@ -77,6 +82,6 @@ The same file must work in QuickJS and QV4, which lag behind browsers:
 - The CRC-32 doubles as a transfer id. An incomplete decoder restarts when the transfer
   changes. A complete one ignores input until `reset()`.
 - Defaults come from the Go `txqr-gif` tool: chunk 100 B, redundancy 2, 300 px, ECC
-  medium, border 4.
+  medium. The exception is border: 1 module rather than the original's 4.
 - Frame timing (how long each frame shows, looping) is the app's job. Keep the library
   free of clocks and durations; the demo owns its 200 ms default.

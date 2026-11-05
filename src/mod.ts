@@ -24,7 +24,7 @@ export interface RenderOptions {
   ecc?: Ecc;
   /** Rendered image width/height in pixels. Default 300. */
   size?: number;
-  /** Quiet zone width in modules. Default 4. */
+  /** Quiet zone width in modules (at least 1). Default 1. */
   border?: number;
 }
 
@@ -75,7 +75,7 @@ export const DEFAULTS: Readonly<Required<EncoderOptions>> = Object.freeze({
   redundancy: 2,
   size: 300,
   ecc: "medium",
-  border: 4,
+  border: 1,
 });
 
 function renderOpts(opts: RenderOptions = {}): Required<RenderOptions> {

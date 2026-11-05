@@ -167,6 +167,35 @@ $("file").onchange = async () => {
 };
 for (const p of [...PARAMS, "frameDuration"]) $(p).onchange = () => { if (encoder) start(); };
 
+// Installable app (PWA) and Android share target, see web/sw.js. Needs a
+// secure origin (https, or http://localhost), so it is skipped elsewhere.
+async function receiveShared() {
+  if (!new URLSearchParams(location.search).has("shared")) return;
+  history.replaceState(null, "", location.pathname);
+  const cache = await caches.open("txqr");
+  const key = new URL("shared", navigator.serviceWorker.controller?.scriptURL ?? location.href).href;
+  const res = await cache.match(key);
+  if (!res) return;
+  await cache.delete(key);
+  const name = res.headers.get("x-name");
+  if (name !== null) {
+    const file = new File([await res.blob()], decodeURIComponent(name), { type: res.headers.get("content-type") });
+    payload = new Uint8Array(await file.arrayBuffer());
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    $("file").files = dt.files;
+  } else {
+    $("text").value = await res.text();
+    payload = null;
+    $("file").value = "";
+  }
+  start();
+}
+
 loadDefaults();
 $("text").value = $("text").value.repeat(20);
 resetReceiver();
+if (window.isSecureContext && "serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch((e) => console.warn("service worker:", e.message));
+  receiveShared().catch((e) => $("sendStats").textContent = `share error: ${e.message}`);
+}

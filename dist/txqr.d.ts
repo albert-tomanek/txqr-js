@@ -19,7 +19,7 @@ export interface RenderOptions {
   /** Error correction level. Default "medium". */ ecc?: Ecc;
   /** Rendered image width/height in pixels. Default 300. */
   size?: number;
-  /** Quiet zone width in modules. Default 4. */
+  /** Quiet zone width in modules (at least 1). Default 1. */
   border?: number;
 }
 /** Encoder settings; defaults follow the original Go txqr tools. */

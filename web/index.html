@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>txqr test page</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2d6cdf">
 <style>
   :root { color-scheme: light dark; font: 14px/1.4 system-ui, sans-serif; }
   body { margin: 0 auto; padding: 16px; max-width: 1100px; }
@@ -63,7 +65,7 @@
         <option value="camera">Camera</option>
       </select>
     </label>
-    <label>Simulated loss (%) <input type="number" id="loss" min="0" max="95" value="30"></label>
+    <label>Simulated loss (%) <input type="number" id="loss" min="0" max="95" value="0"></label>
     <div class="row">
       <button id="reset">Reset receiver</button>
     </div>
