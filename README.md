@@ -4,7 +4,7 @@ A mostly vibe-coded TypeScript rewrite of [divan/txqr](https://github.com/divan/
 
 Compiles to a single JS file (~60kb) and a `.d.ts` for typescript.
 
-See demo [here](https://htmlpreview.github.io/?https://github.com/albert-tomanek/txqr-js/blob/master/dist/demo.html).
+See demo [here](https://albert-tomanek.github.io/txqr-js/dist/demo.html) -- it can be installed to the homescreen as a web app in Android.
 
 ### Desktop
 
