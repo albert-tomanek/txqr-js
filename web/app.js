@@ -10,6 +10,7 @@ const DEFAULT_FRAME_DURATION = 200;
 let frameDuration = DEFAULT_FRAME_DURATION;
 
 let payload = null;     // Uint8Array from a chosen file, else the textarea is used
+let payloadName = "";   // that file's name, sent along for the receiver to save it under
 let encoder = null;
 let startTime = 0;
 let shown = -1;
@@ -27,6 +28,7 @@ function loadDefaults() {
 function options() {
   const o = {};
   for (const p of PARAMS) o[p] = p === "ecc" ? $(p).value : Number($(p).value);
+  if (payload) o.name = payloadName;
   return o;
 }
 
@@ -65,6 +67,7 @@ function tick() {
       return;
     }
     $("sendStats").textContent =
+      (encoder.options.name ? `file ${encoder.options.name}\n` : "") +
       `size ${encoder.size} B, ${encoder.blockCount} blocks, ${encoder.frameCount} frames/loop\n` +
       `${(1000 / frameDuration).toFixed(1)} FPS, loop ${((encoder.frameCount * frameDuration) / 1000).toFixed(1)} s\n` +
       `frame ${i}: ${encoder.frame(i).length} chars`;
@@ -107,11 +110,16 @@ function updateRecv(last) {
 function showResult() {
   const bytes = decoder.bytes();
   const text = TxQR.utf8Decode(bytes);
-  $("output").textContent = text.includes("�") ? `${bytes.length} bytes of binary data` : text;
+  // The name comes from the sender; keep only its last path component.
+  const name = decoder.name?.split(/[\\/]/).pop() || "txqr-received.bin";
+  $("output").textContent = decoder.name !== undefined || text.includes("�")
+    ? `${name}: ${bytes.length} bytes`
+    : text;
   const a = $("download");
   URL.revokeObjectURL(a.href);
   a.href = URL.createObjectURL(new Blob([bytes]));
-  a.download = "txqr-received.bin";
+  a.download = name;
+  a.textContent = `Download ${name}`;
   a.hidden = false;
 }
 
@@ -159,11 +167,11 @@ $("stop").onclick = stop;
 $("defaults").onclick = () => { loadDefaults(); if (encoder) start(); };
 $("reset").onclick = resetReceiver;
 $("source").onchange = setSource;
-$("repeat").onclick = () => { $("text").value = $("text").value.repeat(10); payload = null; $("file").value = ""; };
 $("text").oninput = () => { payload = null; $("file").value = ""; };
 $("file").onchange = async () => {
   const f = $("file").files[0];
   payload = f ? new Uint8Array(await f.arrayBuffer()) : null;
+  payloadName = f ? f.name : "";
 };
 for (const p of [...PARAMS, "frameDuration"]) $(p).onchange = () => { if (encoder) start(); };
 
@@ -181,6 +189,7 @@ async function receiveShared() {
   if (name !== null) {
     const file = new File([await res.blob()], decodeURIComponent(name), { type: res.headers.get("content-type") });
     payload = new Uint8Array(await file.arrayBuffer());
+    payloadName = file.name;
     const dt = new DataTransfer();
     dt.items.add(file);
     $("file").files = dt.files;
@@ -193,8 +202,8 @@ async function receiveShared() {
 }
 
 loadDefaults();
-$("text").value = $("text").value.repeat(20);
 resetReceiver();
+setSource();
 if (window.isSecureContext && "serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch((e) => console.warn("service worker:", e.message));
   receiveShared().catch((e) => $("sendStats").textContent = `share error: ${e.message}`);

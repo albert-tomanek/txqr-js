@@ -49,13 +49,13 @@ Deno.test("utf8 and base64 helpers match the web platform", () => {
   }
 });
 
-Deno.test("defaults come from the original txqr tools", () => {
-  assertEquals(DEFAULTS.chunkSize, 100);
+Deno.test("defaults", () => {
+  assertEquals(DEFAULTS.chunkSize, 800);
   assertEquals(DEFAULTS.redundancy, 2);
   assertEquals(DEFAULTS.size, 300);
-  assertEquals(DEFAULTS.ecc, "medium");
+  assertEquals(DEFAULTS.ecc, "low");
   assert(!("frameDuration" in DEFAULTS), "frame timing belongs to the app");
-  const e = new Encoder("x".repeat(1000));
+  const e = new Encoder("x".repeat(8000));
   assertEquals(e.blockCount, 10);
   assertEquals(e.frameCount, 20);
 });
@@ -111,8 +111,8 @@ Deno.test("recovers with heavy loss, random order, duplicates", () => {
 });
 
 Deno.test("a new transfer restarts an incomplete decoder", () => {
-  const a = new Encoder(randomBytes(1000, 1));
-  const b = new Encoder(randomBytes(1000, 2));
+  const a = new Encoder(randomBytes(1000, 1), { chunkSize: 100 });
+  const b = new Encoder(randomBytes(1000, 2), { chunkSize: 100 });
   const d = new Decoder();
   d.push(a.frame(0));
   d.push(a.frame(1));
@@ -127,7 +127,7 @@ Deno.test("rejects malformed frames and oversized transfers", () => {
   assert(!Decoder.isFrame("hello"));
   assert(!Decoder.isFrame("0/100/5/00000000:ABC")); // wrong payload length
   assertThrows(() => d.push("hello"), TypeError);
-  assertThrows(() => d.push(new Encoder(randomBytes(1000)).frame(0)), RangeError);
+  assertThrows(() => d.push(new Encoder(randomBytes(1000), { chunkSize: 100 }).frame(0)), RangeError);
 });
 
 Deno.test("render -> read round-trip through pixels", () => {
@@ -171,4 +171,29 @@ Deno.test("pushBytes takes natively decoded QR payloads", () => {
   }
   assertEquals(d.bytes(), data);
   assertThrows(() => new Decoder().pushBytes(ascii("not a frame")), TypeError);
+});
+
+Deno.test("file name travels with the data", () => {
+  const data = randomBytes(5000, 21);
+  const name = "résumé 2026.pdf";
+  const e = new Encoder(data, { name, chunkSize: 300 });
+  assertEquals(e.size, 5000);
+  assert(e.frame(0).split(":")[0].split("/").length === 5, "header has nameLen");
+  const d = new Decoder();
+  for (let i = 0; !d.complete; i++) {
+    assertEquals(d.name, undefined);
+    d.push(e.frame(i));
+    assert(i < e.frameCount * 3);
+  }
+  assertEquals([d.name, d.size], [name, 5000]);
+  assertEquals(d.bytes(), data);
+
+  // No name: frames keep the 4-field header, and name stays undefined.
+  const plain = new Encoder("hi");
+  assertEquals(plain.frame(0).split(":")[0].split("/").length, 4);
+  d.reset();
+  d.push(plain.frame(0));
+  assertEquals([d.text(), d.name], ["hi", undefined]);
+
+  assertThrows(() => new Encoder("x", { name: "a".repeat(1025) }), RangeError);
 });

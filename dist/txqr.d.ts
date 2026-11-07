@@ -16,17 +16,22 @@ export declare function crc32(bytes: Uint8Array): number;
 export type Ecc = "low" | "medium" | "quartile" | "high";
 /** How a frame is drawn as a QR code. */
 export interface RenderOptions {
-  /** Error correction level. Default "medium". */ ecc?: Ecc;
+  /** Error correction level. Default "low". */ ecc?: Ecc;
   /** Rendered image width/height in pixels. Default 300. */
   size?: number;
   /** Quiet zone width in modules (at least 1). Default 1. */
   border?: number;
 }
-/** Encoder settings; defaults follow the original Go txqr tools. */
+/** Encoder settings. */
 export interface EncoderOptions extends RenderOptions {
-  /** Payload bytes carried per frame. Default 100. */ chunkSize?: number;
+  /** Payload bytes carried per frame. Default 800. */ chunkSize?: number;
   /** Frames generated per source block, i.e. frameCount = blockCount * redundancy. Default 2. */
   redundancy?: number;
+  /**
+   * File name sent along with the data (at most 1024 bytes of UTF-8), for the
+   * receiver to save it under; see {@link Decoder.name}. Default "" (none).
+   */
+  name?: string;
 }
 /** RGBA (or other `format`) pixel buffer; a canvas ImageData fits. */
 export interface Image {
@@ -61,10 +66,10 @@ export interface DecoderOptions {
   maxBlocks?: number;
 }
 /**
- * Default encoder settings (from the original txqr-gif tool). Frame timing
- * is the app's job; the original showed each frame for 200 ms (5 FPS).
+ * Default encoder settings. Frame timing is the app's job; the demo shows
+ * each frame for 200 ms (5 FPS), as the original Go txqr tools did.
  */
-export declare const DEFAULTS: Readonly<Required<EncoderOptions>>;
+export declare const DEFAULTS: Readonly<Required<Omit<EncoderOptions, "name">>>;
 /** Renders any text (normally a frame) as a QR code SVG string. */
 export declare function renderSVG(text: string, opts?: RenderOptions): string;
 /** Renders text as a QR code RGBA image of size x size pixels. */
@@ -84,7 +89,7 @@ export declare class Encoder {
   /** Effective settings, defaults filled in. */ readonly options: Readonly<
     Required<EncoderOptions>
   >;
-  /** Message length in bytes. */
+  /** Data length in bytes (the name not included). */
   readonly size: number;
   /** Number of source blocks (k). */
   readonly blockCount: number;
@@ -95,6 +100,7 @@ export declare class Encoder {
   readonly frameCount: number;
   private _blocks;
   private _crc;
+  private _nameLen;
   private _frames;
   /** Strings are encoded as UTF-8. */
   constructor(data: Uint8Array | string, options?: EncoderOptions);
@@ -138,6 +144,8 @@ export declare class Decoder {
   private _chunkSize;
   private _k;
   private _crc;
+  private _nameLen;
+  private _name;
   private _solver;
   private _seen;
   private _result;
@@ -170,7 +178,7 @@ export declare class Decoder {
   private _start;
   /** Whether the whole message has been recovered. */
   get complete(): boolean;
-  /** Message size in bytes (0 until the first frame). */
+  /** Data size in bytes, the name not included (0 until the first frame). */
   get size(): number;
   /** Chunk size of the current transfer (0 until the first frame). */
   get chunkSize(): number;
@@ -180,6 +188,12 @@ export declare class Decoder {
   get received(): number;
   /** Fraction recovered so far, 0..1. */
   get progress(): number;
+  /**
+   * The file name the sender attached (Encoder option `name`), or undefined
+   * if it sent none or the message isn't complete yet. It comes from the
+   * sender unchecked: sanitize it before using it as a path.
+   */
+  get name(): string | undefined;
   /** The recovered message. Throws if not complete. */
   bytes(): Uint8Array;
   /** The recovered message decoded as UTF-8. Throws if not complete. */

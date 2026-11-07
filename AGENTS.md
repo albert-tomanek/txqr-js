@@ -13,7 +13,7 @@ QuickJS (embedded in desktop apps) and Qt's QML engine (QV4).
 
 - `src/mod.ts`: public API (Encoder, Decoder, render/read helpers, DEFAULTS, option types).
 - `src/fountain.ts`: systematic sparse random linear fountain code and the GF(2) solver.
-- `src/frame.ts`: frame wire format `code/chunkSize/size/CRC32HEX:base45`.
+- `src/frame.ts`: frame wire format `code/chunkSize/size/CRC32HEX[/nameLen]:base45`.
 - `src/base45.ts`, `src/bytes.ts`: base45, UTF-8, base64, CRC-32 (no web APIs).
 - `src/qr.ts`: wrappers over the `qr` package (paulmillr), the only runtime dependency.
 - `scripts/build.ts`: builds everything in `dist/`.
@@ -81,7 +81,10 @@ The same file must work in QuickJS and QV4, which lag behind browsers:
   small k. Changing the subset selection breaks compatibility with existing senders.
 - The CRC-32 doubles as a transfer id. An incomplete decoder restarts when the transfer
   changes. A complete one ignores input until `reset()`.
-- Defaults come from the Go `txqr-gif` tool: chunk 100 B, redundancy 2, 300 px, ECC
-  medium. The exception is border: 1 module rather than the original's 4.
+- Defaults: chunk 800 B, redundancy 2, 300 px, ECC low, border 1. The Go `txqr-gif`
+  tool used chunk 100, ECC medium and border 4.
+- The optional file name is the first `nameLen` bytes of the fountain-coded message,
+  with `nameLen` as a fifth header field present only when there is a name. Frames
+  without a name keep the 4-field header, so they stay compatible.
 - Frame timing (how long each frame shows, looping) is the app's job. Keep the library
   free of clocks and durations; the demo owns its 200 ms default.

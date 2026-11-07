@@ -20,7 +20,7 @@ export type Ecc = "low" | "medium" | "quartile" | "high";
 
 /** How a frame is drawn as a QR code. */
 export interface RenderOptions {
-  /** Error correction level. Default "medium". */
+  /** Error correction level. Default "low". */
   ecc?: Ecc;
   /** Rendered image width/height in pixels. Default 300. */
   size?: number;
@@ -28,13 +28,21 @@ export interface RenderOptions {
   border?: number;
 }
 
-/** Encoder settings; defaults follow the original Go txqr tools. */
+/** Encoder settings. */
 export interface EncoderOptions extends RenderOptions {
-  /** Payload bytes carried per frame. Default 100. */
+  /** Payload bytes carried per frame. Default 800. */
   chunkSize?: number;
   /** Frames generated per source block, i.e. frameCount = blockCount * redundancy. Default 2. */
   redundancy?: number;
+  /**
+   * File name sent along with the data (at most 1024 bytes of UTF-8), for the
+   * receiver to save it under; see {@link Decoder.name}. Default "" (none).
+   */
+  name?: string;
 }
+
+/** Longest file name, in UTF-8 bytes. */
+const MAX_NAME = 1024;
 
 /** RGBA (or other `format`) pixel buffer; a canvas ImageData fits. */
 export interface Image {
@@ -67,14 +75,14 @@ export interface DecoderOptions {
 }
 
 /**
- * Default encoder settings (from the original txqr-gif tool). Frame timing
- * is the app's job; the original showed each frame for 200 ms (5 FPS).
+ * Default encoder settings. Frame timing is the app's job; the demo shows
+ * each frame for 200 ms (5 FPS), as the original Go txqr tools did.
  */
-export const DEFAULTS: Readonly<Required<EncoderOptions>> = Object.freeze({
-  chunkSize: 100,
+export const DEFAULTS: Readonly<Required<Omit<EncoderOptions, "name">>> = Object.freeze({
+  chunkSize: 800,
   redundancy: 2,
   size: 300,
-  ecc: "medium",
+  ecc: "low",
   border: 1,
 });
 
@@ -112,7 +120,7 @@ export function readQR(image: Image, opts?: ReadOptions): string | undefined {
 export class Encoder {
   /** Effective settings, defaults filled in. */
   readonly options: Readonly<Required<EncoderOptions>>;
-  /** Message length in bytes. */
+  /** Data length in bytes (the name not included). */
   readonly size: number;
   /** Number of source blocks (k). */
   readonly blockCount: number;
@@ -123,21 +131,29 @@ export class Encoder {
   readonly frameCount: number;
   private _blocks: Uint8Array[];
   private _crc: number;
+  private _nameLen: number;
   private _frames: (string | undefined)[];
 
   /** Strings are encoded as UTF-8. */
   constructor(data: Uint8Array | string, options: EncoderOptions = {}) {
     const bytes = typeof data === "string" ? utf8Encode(data) : data;
-    const o = { ...DEFAULTS, ...stripUndefined(options), ...renderOpts(options) };
+    const o = { ...DEFAULTS, name: "", ...stripUndefined(options), ...renderOpts(options) };
     if (!(Number.isInteger(o.chunkSize) && o.chunkSize > 0)) {
       throw new RangeError(`invalid chunkSize: ${o.chunkSize}`);
     }
     if (!(o.redundancy >= 1)) throw new RangeError(`invalid redundancy: ${o.redundancy}`);
+    const name = utf8Encode(String(o.name));
+    if (name.length > MAX_NAME) throw new RangeError(`name longer than ${MAX_NAME} bytes`);
     this.options = Object.freeze(o);
     this.size = bytes.length;
-    this._blocks = splitBlocks(bytes, o.chunkSize);
+    // The name travels in front of the data, inside the fountain-coded message.
+    const message = new Uint8Array(name.length + bytes.length);
+    message.set(name);
+    message.set(bytes, name.length);
+    this._nameLen = name.length;
+    this._blocks = splitBlocks(message, o.chunkSize);
     this.blockCount = this._blocks.length;
-    this._crc = crc32(bytes);
+    this._crc = crc32(message);
     // A single block gains nothing from repetition within a loop.
     this.frameCount = this.blockCount === 1 ? 1 : Math.ceil(this.blockCount * o.redundancy);
     this._frames = new Array(this.frameCount);
@@ -158,6 +174,7 @@ export class Encoder {
       chunkSize: this.options.chunkSize,
       size: this.size,
       crc: this._crc,
+      nameLen: this._nameLen,
       data: encodeBlock(this._blocks, code),
     });
     if (code < this.frameCount) this._frames[code] = text;
@@ -211,6 +228,8 @@ export class Decoder {
   private _chunkSize = 0;
   private _k = 0;
   private _crc = 0;
+  private _nameLen = 0;
+  private _name: string | undefined;
   private _solver: Solver | undefined;
   private _seen = new Set<number>();
   private _result: Uint8Array | undefined;
@@ -236,8 +255,8 @@ export class Decoder {
     if (this._result) return true;
     const f = parseFrame(text);
     if (!f) throw new TypeError(`invalid txqr frame: ${JSON.stringify(text.slice(0, 40))}`);
-    const key = `${f.chunkSize}/${f.size}/${f.crc}`;
-    if (key !== this._key) this._start(key, f.size, f.chunkSize, f.crc);
+    const key = `${f.chunkSize}/${f.size}/${f.crc}/${f.nameLen}`;
+    if (key !== this._key) this._start(key, f.size, f.chunkSize, f.crc, f.nameLen);
     // Cameras see the same frame many times in a row; skip repeats cheaply.
     if (this._seen.has(f.code)) return false;
     this._seen.add(f.code);
@@ -246,13 +265,15 @@ export class Decoder {
     solver.add(blockIndices(f.code, this._k), f.data);
     if (solver.rank < this._k) return false;
 
-    const out = new Uint8Array(this._size);
-    solver.solve().forEach((b, i) => out.set(b.subarray(0, Math.min(b.length, this._size - i * b.length)), i * b.length));
+    const total = this._nameLen + this._size;
+    const out = new Uint8Array(total);
+    solver.solve().forEach((b, i) => out.set(b.subarray(0, Math.min(b.length, total - i * b.length)), i * b.length));
     if (crc32(out) !== this._crc) {
       this.reset();
       throw new Error("txqr: checksum mismatch in reassembled data");
     }
-    this._result = out;
+    if (this._nameLen) this._name = utf8Decode(out.subarray(0, this._nameLen));
+    this._result = out.subarray(this._nameLen);
     this._solver = undefined;
     return true;
   }
@@ -280,8 +301,9 @@ export class Decoder {
     return this.push(text);
   }
 
-  private _start(key: string, size: number, chunkSize: number, crc: number): void {
-    const k = blockCount(size, chunkSize);
+  private _start(key: string, size: number, chunkSize: number, crc: number, nameLen: number): void {
+    const k = blockCount(nameLen + size, chunkSize);
+    if (nameLen > MAX_NAME) throw new RangeError(`txqr: name of ${nameLen} bytes is too long`);
     if (size > this._maxSize) throw new RangeError(`txqr: message of ${size} bytes exceeds maxSize`);
     if (k > this._maxBlocks) throw new RangeError(`txqr: ${k} blocks exceeds maxBlocks`);
     this.reset();
@@ -290,6 +312,7 @@ export class Decoder {
     this._chunkSize = chunkSize;
     this._k = k;
     this._crc = crc;
+    this._nameLen = nameLen;
     this._solver = new Solver(k);
   }
 
@@ -298,7 +321,7 @@ export class Decoder {
     return this._result !== undefined;
   }
 
-  /** Message size in bytes (0 until the first frame). */
+  /** Data size in bytes, the name not included (0 until the first frame). */
   get size(): number {
     return this._size;
   }
@@ -324,6 +347,15 @@ export class Decoder {
     return this._k === 0 ? 0 : this._solver!.rank / this._k;
   }
 
+  /**
+   * The file name the sender attached (Encoder option `name`), or undefined
+   * if it sent none or the message isn't complete yet. It comes from the
+   * sender unchecked: sanitize it before using it as a path.
+   */
+  get name(): string | undefined {
+    return this._name;
+  }
+
   /** The recovered message. Throws if not complete. */
   bytes(): Uint8Array {
     if (!this._result) throw new Error("txqr: message not complete");
@@ -338,8 +370,8 @@ export class Decoder {
   /** Forgets everything, ready for a new transfer. */
   reset(): void {
     this._key = "";
-    this._size = this._chunkSize = this._k = this._crc = 0;
-    this._solver = this._result = undefined;
+    this._size = this._chunkSize = this._k = this._crc = this._nameLen = 0;
+    this._solver = this._result = this._name = undefined;
     this._seen = new Set();
   }
 }
