@@ -4,10 +4,55 @@ import * as TxQR from "./txqr.mjs";
 
 const $ = (id) => document.getElementById(id);
 const PARAMS = ["chunkSize", "redundancy", "size", "border", "ecc"];
-// Frame timing is the app's job, not the library's. 200 ms (5 FPS) is the
-// original txqr-gif default.
-const DEFAULT_FRAME_DURATION = 200;
-let frameDuration = DEFAULT_FRAME_DURATION;
+// Frame timing is the app's job, not the library's. 5 FPS (200 ms per frame)
+// is the original txqr-gif default.
+const DEFAULT_FPS = 5;
+let frameDuration = 1000 / DEFAULT_FPS;
+
+// Preset buttons for fields that have them, plus "Custom", which prompts.
+// The value lives in a hidden input inside the .presets group.
+const PRESETS = {
+  chunkSize: { label: "Chunk size (bytes)", choices: [["Large", 800], ["Small", 200]] },
+  fps: { label: "Frames per second", choices: [["High", 20], ["Low", 5]] },
+};
+
+function setPreset(id, value) {
+  $(id).value = value;
+  const group = $(id).parentElement;
+  let matched = false;
+  for (const b of group.querySelectorAll("button[data-value]")) {
+    const on = Number(b.dataset.value) === Number(value);
+    b.setAttribute("aria-pressed", on);
+    matched ||= on;
+  }
+  const custom = group.querySelector("button.custom");
+  custom.setAttribute("aria-pressed", !matched);
+  custom.textContent = matched ? "Custom" : `Custom: ${value}`;
+}
+
+for (const group of document.querySelectorAll(".presets")) {
+  const id = group.dataset.for;
+  const { label, choices } = PRESETS[id];
+  for (const [name, value] of choices) {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.dataset.value = value;
+    b.onclick = () => { setPreset(id, value); if (encoder) start(); };
+    group.append(b);
+  }
+  const custom = document.createElement("button");
+  custom.className = "custom";
+  custom.textContent = "Custom";
+  custom.onclick = () => {
+    const input = prompt(label, $(id).value);
+    if (input === null) return;
+    const value = Number(input);
+    if (!(value > 0)) return alert(`Not a positive number: ${input}`);
+    setPreset(id, value);
+    if (encoder) start();
+  };
+  group.append(custom);
+}
 
 let payload = null;     // Uint8Array from a chosen file, else the textarea is used
 let payloadName = "";   // that file's name, sent along for the receiver to save it under
@@ -21,8 +66,11 @@ let lastDecoded = "";
 let stream = null;
 
 function loadDefaults() {
-  for (const p of PARAMS) $(p).value = TxQR.DEFAULTS[p];
-  $("frameDuration").value = DEFAULT_FRAME_DURATION;
+  for (const p of PARAMS) {
+    if (p in PRESETS) setPreset(p, TxQR.DEFAULTS[p]);
+    else $(p).value = TxQR.DEFAULTS[p];
+  }
+  setPreset("fps", DEFAULT_FPS);
 }
 
 function options() {
@@ -35,8 +83,9 @@ function options() {
 function start() {
   stop();
   try {
-    frameDuration = Number($("frameDuration").value);
-    if (!(frameDuration > 0)) throw new RangeError(`invalid frame duration: ${frameDuration}`);
+    const fps = Number($("fps").value);
+    if (!(fps > 0)) throw new RangeError(`invalid FPS: ${fps}`);
+    frameDuration = 1000 / fps;
     encoder = new TxQR.Encoder(payload ?? $("text").value, options());
   } catch (e) {
     $("sendStats").textContent = `error: ${e.message}`;
@@ -173,7 +222,7 @@ $("file").onchange = async () => {
   payload = f ? new Uint8Array(await f.arrayBuffer()) : null;
   payloadName = f ? f.name : "";
 };
-for (const p of [...PARAMS, "frameDuration"]) $(p).onchange = () => { if (encoder) start(); };
+for (const p of PARAMS) if (!(p in PRESETS)) $(p).onchange = () => { if (encoder) start(); };
 
 // Installable app (PWA) and Android share target, see web/sw.js. Needs a
 // secure origin (https, or http://localhost), so it is skipped elsewhere.

@@ -13,7 +13,9 @@
   h2 { font-size: 16px; margin: 0 0 8px; }
   .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
   section { border: 1px solid #8884; border-radius: 8px; padding: 12px; min-width: 0; }
-  label { display: grid; grid-template-columns: 9em 1fr; align-items: center; gap: 8px; margin: 4px 0; }
+  label, .field { display: grid; grid-template-columns: 9em 1fr; align-items: center; gap: 8px; margin: 4px 0; }
+  .presets { display: flex; gap: 4px; flex-wrap: wrap; }
+  .presets button[aria-pressed=true] { font-weight: bold; outline: 2px solid #2d6cdf; }
   input[type=number], select { width: 100%; box-sizing: border-box; }
   textarea { width: 100%; box-sizing: border-box; height: 6em; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
@@ -34,9 +36,9 @@
     <div class="row">
       <input type="file" id="file">
     </div>
-    <label>Chunk size (B) <input type="number" id="chunkSize" min="1" max="2800"></label>
+    <div class="field">Chunk size (B) <span class="presets" data-for="chunkSize"><input type="hidden" id="chunkSize"></span></div>
     <label>Redundancy <input type="number" id="redundancy" min="1" step="0.1"></label>
-    <label>Frame duration (ms) <input type="number" id="frameDuration" min="10" step="10"></label>
+    <div class="field">Speed (FPS) <span class="presets" data-for="fps"><input type="hidden" id="fps"></span></div>
     <label>QR size (px) <input type="number" id="size" min="50" step="10"></label>
     <label>Border (modules) <input type="number" id="border" min="1"></label>
     <label>Error correction
