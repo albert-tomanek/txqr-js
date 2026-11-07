@@ -156,17 +156,43 @@ function updateRecv(last) {
     (decoder.complete ? `\ncomplete in ${((performance.now() - decodeStart) / 1000).toFixed(2)} s` : "");
 }
 
+// MIME types for common extensions. Downloads need one: Android otherwise
+// sniffs the content, and often saves the file as .txt.
+const MIME = {
+  txt: "text/plain", md: "text/markdown", csv: "text/csv", html: "text/html", htm: "text/html",
+  json: "application/json", xml: "application/xml", pdf: "application/pdf",
+  zip: "application/zip", gz: "application/gzip", "7z": "application/x-7z-compressed",
+  tar: "application/x-tar", rar: "application/vnd.rar", apk: "application/vnd.android.package-archive",
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp",
+  heic: "image/heic", svg: "image/svg+xml", bmp: "image/bmp",
+  mp3: "audio/mpeg", m4a: "audio/mp4", ogg: "audio/ogg", opus: "audio/opus", wav: "audio/wav",
+  mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime", mkv: "video/x-matroska",
+  doc: "application/msword", xls: "application/vnd.ms-excel", ppt: "application/vnd.ms-powerpoint",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  odt: "application/vnd.oasis.opendocument.text", epub: "application/epub+zip",
+  vcf: "text/vcard", ics: "text/calendar",
+};
+
+function mimeType(name) {
+  const ext = /\.([^.]+)$/.exec(name)?.[1].toLowerCase();
+  return MIME[ext] ?? "application/octet-stream";
+}
+
 function showResult() {
   const bytes = decoder.bytes();
   const text = TxQR.utf8Decode(bytes);
+  const isText = !text.includes("�");
   // The name comes from the sender; keep only its last path component.
-  const name = decoder.name?.split(/[\\/]/).pop() || "txqr-received.bin";
-  $("output").textContent = decoder.name !== undefined || text.includes("�")
+  const name = decoder.name?.split(/[\\/]/).pop() ||
+    (isText ? "txqr-received.txt" : "txqr-received.bin");
+  $("output").textContent = decoder.name !== undefined || !isText
     ? `${name}: ${bytes.length} bytes`
     : text;
   const a = $("download");
   URL.revokeObjectURL(a.href);
-  a.href = URL.createObjectURL(new Blob([bytes]));
+  a.href = URL.createObjectURL(new Blob([bytes], { type: mimeType(name) }));
   a.download = name;
   a.textContent = `Download ${name}`;
   a.hidden = false;
