@@ -180,17 +180,30 @@ function resetReceiver() {
   updateRecv("-");
 }
 
+let cameraId = null; // deviceId of the camera in use; null picks the back camera
+
 async function setSource() {
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
-  $("video").hidden = true;
+  $("video").hidden = $("nextCamera").hidden = true;
+  $("cameraName").textContent = "";
   if ($("source").value !== "camera") return;
+  let s;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    s = await navigator.mediaDevices.getUserMedia({
+      video: cameraId ? { deviceId: { exact: cameraId } } : { facingMode: "environment" },
+    });
   } catch (e) {
     $("recvStats").textContent = `camera error: ${e.message}`;
     return;
   }
+  stream = s;
+  const track = s.getVideoTracks()[0];
+  cameraId = track.getSettings().deviceId ?? null;
+  $("cameraName").textContent = track.label;
+  // Device labels are only available once camera access has been granted.
+  const cameras = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+  $("nextCamera").hidden = cameras.length < 2;
   const video = $("video");
   video.srcObject = stream;
   video.hidden = false;
@@ -198,7 +211,7 @@ async function setSource() {
   const canvas = $("camCanvas");
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   const loop = () => {
-    if (!stream) return;
+    if (stream !== s) return; // this camera was stopped or replaced
     if (video.videoWidth && !decoder.complete) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -216,6 +229,12 @@ $("stop").onclick = stop;
 $("defaults").onclick = () => { loadDefaults(); if (encoder) start(); };
 $("reset").onclick = resetReceiver;
 $("source").onchange = setSource;
+$("nextCamera").onclick = async () => {
+  const cameras = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+  const i = cameras.findIndex((d) => d.deviceId === cameraId);
+  cameraId = cameras[(i + 1) % cameras.length].deviceId;
+  setSource();
+};
 $("text").oninput = () => { payload = null; $("file").value = ""; };
 $("file").onchange = async () => {
   const f = $("file").files[0];
